@@ -1,0 +1,4 @@
+{"type": "transcript", "text": "Let's restart the app.", "language": "en", "duration_ms": 5922.2, "ts": "2026-07-24T15:45:50.255977+00:00"}
+{"type": "transcript", "text": "", "language": "hi", "duration_ms": 4824.0, "ts": "2026-07-24T15:46:11.905503+00:00"}
+{"type": "plan", "plan": {"intent": "restart_app", "explanation": "Restarting IntelliVox application.", "steps": [{"tool": "open_app", "args": {"name": "IntelliVox"}}, {"tool": "press_key", "args": {"key": "cmd+q"}}], "clarification_needed": false, "clarification_question": null}, "duration_ms": 23297.9, "ts": "2026-07-24T15:46:13.554655+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T15:46:13.555090+00:00"}

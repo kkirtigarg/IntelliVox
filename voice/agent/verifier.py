@@ -86,9 +86,11 @@ def verify_step(tool: str, args: dict, result: dict) -> dict:
             v = verify_app_open(app_name)
             return {"verified": v["success"], "message": v.get("message", f"{app_name} is open")}
 
-    if tool in ("navigate_url", "google_search", "youtube_search"):
-        url = args.get("url", "")
-        if "google.com" in url:
+    if tool in ("navigate_url", "google_search", "youtube_search", "youtube_play", "open_gmail"):
+        url = args.get("url", "") or result.get("url", "")
+        if "mail.google.com" in url or tool == "open_gmail":
+            v = verify_url("mail.google.com")
+        elif "google.com" in url:
             v = verify_url("google.com")
         elif "youtube.com" in url:
             v = verify_url("youtube.com")
@@ -96,6 +98,13 @@ def verify_step(tool: str, args: dict, result: dict) -> dict:
             fragment = url.split("/")[2] if "/" in url else url[:20]
             v = verify_url(fragment)
         return {"verified": v["success"], "message": v.get("message", f"Navigated to {url}")}
+
+    if tool == "save_summary_file":
+        import os
+        path = result.get("path", "")
+        if path and os.path.isfile(path):
+            return {"verified": True, "message": result.get("message", f"Saved to {path}")}
+        return {"verified": result.get("success", False), "message": result.get("message", "Save failed")}
 
     # For other tools, trust the result
     return {"verified": True, "message": result.get("message", "Done")}

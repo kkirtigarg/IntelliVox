@@ -69,6 +69,23 @@ def open_app(name: str) -> dict:
         time.sleep(0.8)
         return {"success": True, "message": "Opened Finder"}
 
+    if app_name == "Mail":
+        script = '''
+        tell application "Mail"
+            activate
+            try
+                set v to first mail viewer
+            on error
+                make new viewer at end of mail viewers
+            end try
+        end tell
+        '''
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+        time.sleep(0.8)
+        if result.returncode == 0:
+            return {"success": True, "message": "Opened Mail"}
+        # fall through to generic open
+
     # Primary method: `open -a` — works without special permissions
     result = subprocess.run(["open", "-a", app_name], capture_output=True, text=True)
     if result.returncode == 0:

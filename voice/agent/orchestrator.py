@@ -26,6 +26,7 @@ Message protocol (client → server):
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import tempfile
 import time
@@ -39,10 +40,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from faster_whisper import WhisperModel
 
 from agent import safety, tts
-from agent.planner import plan, resolve_step_args
 from agent.tools import run_tool
+from agent.plan_validator import validate_plan
+from agent.planner import plan, resolve_step_args, replan
 from agent.verifier import verify_step
 from agent.audit import AuditSession
+from agent.metrics import compute_metrics, group_failures
+from agent.telemetry import track
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +57,11 @@ log = logging.getLogger("intellivox")
 
 WHISPER_MODEL_ID = "Systran/faster-whisper-medium"
 SAMPLE_RATE      = 16_000
+# Reject non-English speech before planning (set INTELLIVOX_ENGLISH_ONLY=false to disable)
+ENGLISH_ONLY = os.getenv("INTELLIVOX_ENGLISH_ONLY", "true").lower() in ("1", "true", "yes")
+# Min confidence to treat auto-detected language as non-English (lower = stricter English gate)
+NON_ENGLISH_REJECT_PROB = float(os.getenv("INTELLIVOX_NON_ENGLISH_REJECT_PROB", "0.35"))
+MAX_REPLANS = int(os.getenv("INTELLIVOX_MAX_REPLANS", "2"))
 
 whisper_model: WhisperModel | None = None
 
@@ -69,6 +78,8 @@ async def startup():
     loop = asyncio.get_event_loop()
     whisper_model = await loop.run_in_executor(None, _load_whisper)
     log.info("✓ Whisper ready")
+    if ENGLISH_ONLY:
+        log.info("✓ English-only mode (set INTELLIVOX_ENGLISH_ONLY=false to allow other languages)")
     log.info("✓ IntelliVox Agent Server on ws://localhost:8765/ws")
 
 
@@ -106,8 +117,34 @@ def webm_to_pcm(data: bytes) -> np.ndarray:
 
 def transcribe(audio: np.ndarray) -> dict:
     segments, info = whisper_model.transcribe(audio, beam_size=5)
+    lang = info.language
+    prob = info.language_probability
+
+    if (
+        ENGLISH_ONLY
+        and lang != "en"
+        and prob >= NON_ENGLISH_REJECT_PROB
+    ):
+        log.info("Rejected non-English transcript [%s] prob=%.2f", lang, prob)
+        return {
+            "text": "",
+            "language": lang,
+            "confidence": round(prob, 2),
+            "english_only_rejected": True,
+        }
+
+    if ENGLISH_ONLY and lang == "en":
+        segments, info = whisper_model.transcribe(audio, beam_size=5, language="en")
+
     text = " ".join(s.text.strip() for s in segments).strip()
-    return {"text": text, "language": info.language, "confidence": round(info.language_probability, 2)}
+    return {
+        "text": text,
+        "language": "en" if ENGLISH_ONLY else info.language,
+        "confidence": round(info.language_probability, 2),
+    }
+
+
+transcribe = track(name="whisper_transcribe", project_name="intellivox", tags=["asr"])(transcribe)
 
 
 # ── Agent execution loop ───────────────────────────────────────────────────────
@@ -157,8 +194,10 @@ class AgentSession:
         except asyncio.TimeoutError:
             return False  # treat timeout as "no"
 
+    @track(name="agent_run_task", project_name="intellivox", tags=["agent"])
     async def run_task(self, transcript_result: dict):
         """Full pipeline: transcript → plan → safety → execute → verify."""
+        self._cancelled = False  # fresh task — don't inherit cancel from a prior attempt
         text     = transcript_result["text"]
         language = transcript_result["language"]
 
@@ -166,7 +205,6 @@ class AgentSession:
             await self.send({"type": "error", "text": "I didn't catch that. Please try again."})
             return
 
-        self.audit.log_transcript(text, language)
         log.info("[%s] Transcript [%s]: %s", self.session_id, language, text)
 
         # ── 1. Plan ──────────────────────────────────────────────────────────
@@ -174,8 +212,10 @@ class AgentSession:
         tts.speak("Let me figure that out.")
 
         loop = asyncio.get_event_loop()
+        t0 = time.perf_counter()
         action_plan = await loop.run_in_executor(None, plan, text)
-        self.audit.log_plan(action_plan)
+        plan_ms = (time.perf_counter() - t0) * 1000
+        self.audit.log_plan(action_plan, duration_ms=plan_ms)
 
         if action_plan.get("clarification_needed"):
             q = action_plan.get("clarification_question", "Could you rephrase that?")
@@ -196,27 +236,36 @@ class AgentSession:
             await self.send({"type": "error", "text": "I couldn't figure out what to do."})
             return
 
-        # ── 2. Execute steps ─────────────────────────────────────────────────
+        # ── 2. Execute steps (with replan on failure) ────────────────────────
         completed    = 0
-        step_results = []   # stores each step's raw result for chaining
-        for i, step in enumerate(steps):
+        step_results: list[dict] = []
+        step_idx     = 0
+        replans      = 0
+
+        while step_idx < len(steps):
             if self._cancelled:
-                await self.send({"type": "info", "text": "Task cancelled."})
+                await self.send({"type": "error", "text": "Task cancelled."})
                 self.audit.log_outcome("cancelled", "User cancelled the task.")
                 tts.speak("Task cancelled.")
                 return
 
-            # Wait while paused
             while self._paused and not self._cancelled:
                 await asyncio.sleep(0.3)
 
+            step = steps[step_idx]
             tool = step.get("tool", "")
             args = step.get("args", {})
-
-            # ── Resolve placeholders from previous step results (chaining) ────
             args = resolve_step_args(args, step_results)
 
-            # ── Safety check ─────────────────────────────────────────────────
+            if tool == "summarize":
+                text = str(args.get("text") or "")
+                if not text.strip() or "{{step_" in text:
+                    err_msg = "Nothing to summarize — email content was not read."
+                    await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                    log.warning("[%s] skipping summarize — no mail body", self.session_id)
+                    step_idx += 1
+                    continue
+
             safety_result = safety.check(tool, args, source="voice")
             self.audit.log_safety(tool, args, safety_result.decision, safety_result.reason)
             log.info("[%s] Safety %s → %s", self.session_id, tool, safety_result.decision)
@@ -229,50 +278,50 @@ class AgentSession:
                 return
 
             if safety_result.decision == safety.Decision.CONFIRM:
-                confirm_msg = f"Step {i+1}: {safety_result.reason} Shall I proceed?"
+                confirm_msg = f"Step {step_idx+1}: {safety_result.reason} Shall I proceed?"
                 await self.send({
                     "type":       "confirm",
                     "text":       confirm_msg,
                     "tool":       tool,
-                    "step_index": i,
+                    "step_index": step_idx,
                 })
                 tts.speak(confirm_msg)
                 self.audit.log_confirmation(tool, "waiting")
-
                 approved = await self.wait_for_confirmation()
                 self.audit.log_confirmation(tool, "yes" if approved else "no")
-
                 if not approved:
                     await self.send({"type": "info", "text": "Skipped that step."})
                     tts.speak("Okay, skipping.")
+                    step_idx += 1
                     continue
 
-            # ── Execute ───────────────────────────────────────────────────────
             step_desc = _describe_step(tool, args)
-            await self.send({"type": "executing", "step_index": i, "tool": tool, "text": step_desc})
+            await self.send({"type": "executing", "step_index": step_idx, "tool": tool, "text": step_desc})
             log.info("[%s] → %s(%s)", self.session_id, tool, args)
 
+            t0 = time.perf_counter()
             result = await loop.run_in_executor(None, run_tool, tool, args)
-
-            # Store result for chaining (next steps can reference it)
+            tool_ms = (time.perf_counter() - t0) * 1000
             step_results.append(result)
 
-            # ── Verify ────────────────────────────────────────────────────────
             verification = await loop.run_in_executor(None, verify_step, tool, args, result)
             verified = verification.get("verified", False)
-            self.audit.log_action(tool, args, result, verified)
+            self.audit.log_action(tool, args, result, verified, step_index=step_idx, duration_ms=tool_ms)
+
+            if result.get("success") and verified:
+                if tool == "search_mail" and result.get("count", 0) == 0:
+                    result["success"] = False
+                    result["message"] = f"No mail found for '{args.get('query', '')}'"
 
             if result.get("success") and verified:
                 done_msg = verification.get("message", f"{tool} done")
 
-                # find_file: inject path into next pdf/file step
                 if tool == "find_file" and result.get("path"):
                     found_path = result["path"]
-                    import os as _os
-                    done_msg = f"Found: {_os.path.basename(found_path)}"
+                    done_msg = f"Found: {os.path.basename(found_path)}"
                     log.info("[%s] find_file -> %s", self.session_id, found_path)
-                    if i + 1 < len(steps):
-                        ns = steps[i + 1]
+                    if step_idx + 1 < len(steps):
+                        ns = steps[step_idx + 1]
                         next_tool = ns.get("tool")
                         if next_tool == "summarize_codebase":
                             ns["args"]["directory"] = found_path
@@ -280,16 +329,40 @@ class AgentSession:
                         elif next_tool in ("open_file", "read_pdf", "read_file"):
                             ns["args"]["path"] = found_path
 
-                # read_pdf: inject text into next summarize/answer step
                 elif tool == "read_pdf" and result.get("text"):
                     chars = len(result["text"])
-                    done_msg = f"Read {result.get('page_count','?')} pages ({chars:,} chars)"
-                    if i + 1 < len(steps):
-                        ns = steps[i + 1]
+                    done_msg = f"Read {result.get('page_count', '?')} pages ({chars:,} chars)"
+                    if step_idx + 1 < len(steps):
+                        ns = steps[step_idx + 1]
                         if ns.get("tool") in ("summarize", "answer_question"):
                             ns["args"]["text"] = result["text"]
 
-                # summarize / summarize_codebase: display full summary in UI + speak excerpt
+                elif tool == "open_gmail":
+                    done_msg = result.get("message", "Opened Gmail in Chrome")
+
+                elif tool in ("read_mail", "read_gmail") and result.get("body"):
+                    n_read = result.get("count", 1)
+                    if result.get("source") == "apple_mail":
+                        done_msg = f"Read {n_read} emails via Apple Mail (Gmail open in Chrome)"
+                    elif n_read > 1:
+                        done_msg = f"Read {n_read} emails"
+                    else:
+                        done_msg = f"Read mail: {result.get('subject', '')[:60]}"
+                    if step_idx + 1 < len(steps):
+                        ns = steps[step_idx + 1]
+                        if ns.get("tool") in ("summarize", "answer_question"):
+                            ns["args"]["text"] = result["body"]
+
+                elif tool == "search_mail":
+                    done_msg = f"Found {result.get('count', 0)} message(s)"
+
+                elif tool == "web_browse" and result.get("text"):
+                    done_msg = result.get("message", "Page loaded")
+                    if step_idx + 1 < len(steps):
+                        ns = steps[step_idx + 1]
+                        if ns.get("tool") in ("summarize", "answer_question"):
+                            ns["args"]["text"] = result["text"]
+
                 elif tool in ("summarize", "summarize_codebase") and result.get("summary"):
                     if tool == "summarize_codebase":
                         done_msg = f"Summarized {result.get('files_read', '?')} files"
@@ -298,22 +371,73 @@ class AgentSession:
                     await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
                     short = result["summary"][:220].replace("\n", " ").strip()
                     tts.speak(short)
+                    if step_idx + 1 < len(steps):
+                        ns = steps[step_idx + 1]
+                        if ns.get("tool") == "save_summary_file":
+                            ns["args"]["summary"] = result["summary"]
+                            if result.get("directory") and not ns["args"].get("filename"):
+                                base = os.path.basename(result["directory"])
+                                ns["args"]["filename"] = f"{base}-codebase-summary.txt"
 
-                # answer_question: display answer in UI + speak excerpt
+                elif tool == "save_summary_file" and result.get("path"):
+                    done_msg = result.get("message", "Summary saved")
+                    tts.speak(f"Summary saved to {os.path.basename(result['path'])}")
+
                 elif tool == "answer_question" and result.get("answer"):
                     done_msg = "Answer ready"
                     await self.send({"type": "rich_result", "label": "Answer", "text": result["answer"]})
                     short = result["answer"][:220].replace("\n", " ").strip()
                     tts.speak(short)
 
-                await self.send({"type": "step_done", "step_index": i, "verified": True, "text": done_msg})
-                log.info("[%s] step %d done: %s", self.session_id, i, done_msg)
-                completed += 1
-            else:
-                err_msg = result.get("message") or verification.get("message", "Step failed")
-                await self.send({"type": "step_failed", "step_index": i, "text": err_msg})
-                log.warning("[%s] step %d failed: %s", self.session_id, i, err_msg)
-                self.audit.log_error(err_msg)
+                if result.get("success") and verified:
+                    await self.send({"type": "step_done", "step_index": step_idx, "verified": True, "text": done_msg})
+                    log.info("[%s] step %d done: %s", self.session_id, step_idx, done_msg)
+                    completed += 1
+                    step_idx += 1
+                    continue
+
+            err_msg = result.get("message") or verification.get("message", "Step failed")
+            await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+            log.warning("[%s] step %d failed: %s", self.session_id, step_idx, err_msg)
+            self.audit.log_error(err_msg)
+
+            if tool == "read_gmail":
+                while step_idx + 1 < len(steps):
+                    nxt = steps[step_idx + 1].get("tool")
+                    if nxt in ("summarize", "save_summary_file", "read_gmail", "open_gmail"):
+                        steps.pop(step_idx + 1)
+                    else:
+                        break
+                step_idx += 1
+                continue
+
+            if replans < MAX_REPLANS:
+                replans += 1
+                context = (
+                    f"Original request: {text}\n"
+                    f"Failed step {step_idx + 1}: tool={tool}, error={err_msg}\n"
+                    f"Completed {completed} steps successfully.\n"
+                    f"Recent results: {json.dumps(step_results[-2:], default=str)[:1500]}"
+                )
+                await self.send({"type": "planning", "text": "Adjusting plan after failure…"})
+                new_plan = await loop.run_in_executor(None, replan, text, context)
+                self.audit.log_plan(new_plan, duration_ms=0)
+                if new_plan.get("clarification_needed"):
+                    q = new_plan.get("clarification_question") or err_msg
+                    await self.send({"type": "error", "text": q})
+                    tts.speak(q[:200])
+                    break
+                if new_plan.get("steps") and not new_plan.get("clarification_needed"):
+                    await self.send({
+                        "type":        "plan",
+                        "intent":      new_plan.get("intent", "replan"),
+                        "explanation": new_plan.get("explanation", "Trying a different approach…"),
+                        "steps":       new_plan.get("steps", []),
+                    })
+                    steps = steps[:step_idx] + new_plan["steps"]
+                    continue
+
+            step_idx += 1
 
         # Done
         summary_msg = f"Done! Completed {completed} of {len(steps)} steps."
@@ -330,6 +454,7 @@ def _describe_step(tool: str, args: dict) -> str:
         "navigate_url":   lambda a: f"Navigating to {a.get('url', '')}…",
         "google_search":  lambda a: f"Searching Google for '{a.get('query', '')}'…",
         "youtube_search": lambda a: f"Searching YouTube for '{a.get('query', '')}'…",
+        "youtube_play":   lambda a: f"Playing '{a.get('query', '')}' on YouTube…",
         "open_app":       lambda a: f"Opening {a.get('name', 'app')}…",
         "close_app":      lambda a: f"Closing {a.get('name', 'app')}…",
         "type_text":      lambda a: f"Typing: {a.get('text', '')}…",
@@ -339,6 +464,13 @@ def _describe_step(tool: str, args: dict) -> str:
         "list_files":     lambda a: f"Listing files in {a.get('directory', '~')}…",
         "read_file":      lambda a: f"Reading {a.get('path', '')}…",
         "summarize_codebase": lambda a: f"Summarizing code in {a.get('directory', '')}…",
+        "save_summary_file": lambda a: f"Saving summary to {a.get('filename', 'summary.txt')}…",
+        "open_gmail":     lambda a: (
+            f"Opening Gmail in Chrome"
+            + (f" (search: {a.get('query', '')})" if a.get("query") else "…")
+        ),
+        "read_gmail":     lambda a: f"Reading top {a.get('limit', 5)} Gmail messages…",
+        "web_browse":     lambda a: f"Browsing web: {(a.get('goal') or a.get('url', ''))[:60]}…",
         "computer_use":   lambda a: f"Controlling computer: {a.get('goal', '')[:80]}…",
         "write_file":     lambda a: f"Writing to {a.get('path', '')}…",
         "delete_file":    lambda a: f"Deleting {a.get('path', '')}…",
@@ -365,13 +497,16 @@ async def ws_endpoint(ws: WebSocket):
             # Audio blob → transcribe + run agent
             if "bytes" in msg and msg["bytes"]:
                 data = msg["bytes"]
+                session._cancelled = False  # new voice command starts a fresh task
                 log.info("[%s] Received %.1f KB audio (%s)", session.session_id, len(data) / 1024, _audio_suffix(data))
                 await session.send({"type": "transcribing", "text": "Transcribing…"})
 
                 loop = asyncio.get_event_loop()
                 try:
+                    t0 = time.perf_counter()
                     audio  = await loop.run_in_executor(None, webm_to_pcm, data)
                     result = await loop.run_in_executor(None, transcribe, audio)
+                    asr_ms = (time.perf_counter() - t0) * 1000
                 except Exception as e:
                     log.exception("ASR error")
                     await session.send({"type": "error", "text": f"Transcription failed: {e}"})
@@ -382,6 +517,16 @@ async def ws_endpoint(ws: WebSocket):
                     "text":     result["text"],
                     "language": result["language"],
                 })
+                session.audit.log_transcript(result["text"], result["language"], duration_ms=asr_ms)
+
+                if result.get("english_only_rejected"):
+                    msg = (
+                        "IntelliVox is set to English only. "
+                        "Please speak in English and try again."
+                    )
+                    await session.send({"type": "clarify", "text": msg})
+                    tts.speak("Please speak in English.")
+                    continue
 
                 # Run agent in background so control messages can still arrive
                 asyncio.create_task(session.run_task(result))
@@ -397,6 +542,21 @@ async def ws_endpoint(ws: WebSocket):
 @app.get("/health")
 async def health():
     return {"status": "ok", "whisper": WHISPER_MODEL_ID}
+
+
+@app.get("/metrics")
+async def metrics():
+    """Aggregate session metrics from audit logs (Comet-style monitoring)."""
+    from agent.telemetry import opik_enabled
+    data = compute_metrics()
+    data["opik_tracing"] = opik_enabled()
+    return data
+
+
+@app.get("/diagnostics")
+async def diagnostics():
+    """Grouped recurring errors from audit logs."""
+    return {"failures": group_failures()}
 
 
 if __name__ == "__main__":

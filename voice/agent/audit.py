@@ -45,12 +45,18 @@ class AuditSession:
             f.write(json.dumps(entry) + "\n")
         log.debug("AUDIT %s", entry)
 
-    def log_transcript(self, text: str, language: str):
-        self._write({"type": "transcript", "text": _mask(text), "language": language})
+    def log_transcript(self, text: str, language: str, duration_ms: float | None = None):
+        entry = {"type": "transcript", "text": _mask(text), "language": language}
+        if duration_ms is not None:
+            entry["duration_ms"] = round(duration_ms, 1)
+        self._write(entry)
 
-    def log_plan(self, plan: dict):
+    def log_plan(self, plan: dict, duration_ms: float | None = None):
         safe_plan = json.loads(_mask(json.dumps(plan)))
-        self._write({"type": "plan", "plan": safe_plan})
+        entry = {"type": "plan", "plan": safe_plan}
+        if duration_ms is not None:
+            entry["duration_ms"] = round(duration_ms, 1)
+        self._write(entry)
 
     def log_safety(self, tool: str, args: dict, decision: str, reason: str):
         self._write({
@@ -61,14 +67,27 @@ class AuditSession:
             "reason":   reason,
         })
 
-    def log_action(self, tool: str, args: dict, result: dict, verified: bool):
-        self._write({
+    def log_action(
+        self,
+        tool: str,
+        args: dict,
+        result: dict,
+        verified: bool,
+        step_index: int | None = None,
+        duration_ms: float | None = None,
+    ):
+        entry = {
             "type":     "action",
             "tool":     tool,
             "args":     json.loads(_mask(json.dumps(args))),
             "result":   result,
             "verified": verified,
-        })
+        }
+        if step_index is not None:
+            entry["step_index"] = step_index
+        if duration_ms is not None:
+            entry["duration_ms"] = round(duration_ms, 1)
+        self._write(entry)
 
     def log_confirmation(self, tool: str, user_response: str):
         self._write({"type": "confirmation", "tool": tool, "response": user_response})

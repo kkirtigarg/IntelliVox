@@ -1,0 +1,5 @@
+{"type": "transcript", "text": "play wakka wakka on YouTube on Chrome", "language": "en", "duration_ms": 6665.9, "ts": "2026-07-24T15:46:55.746769+00:00"}
+{"type": "plan", "plan": {"intent": "youtube_search", "explanation": "Opening Chrome and searching YouTube for 'wakka wakka'.", "steps": [{"tool": "youtube_search", "args": {"query": "wakka wakka", "browser": "chrome"}}], "clarification_needed": false, "clarification_question": null}, "duration_ms": 1.9, "ts": "2026-07-24T15:46:55.750602+00:00"}
+{"type": "safety", "tool": "youtube_search", "args": {"query": "wakka wakka", "browser": "chrome"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T15:46:55.750822+00:00"}
+{"type": "action", "tool": "youtube_search", "args": {"query": "wakka wakka", "browser": "chrome"}, "result": {"success": true, "message": "Opened https://www.youtube.com/results?search_query=wakka+wakka in Google Chrome"}, "verified": true, "step_index": 0, "duration_ms": 334.1, "ts": "2026-07-24T15:46:56.721276+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T15:46:56.722140+00:00"}

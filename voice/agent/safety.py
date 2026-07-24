@@ -21,10 +21,11 @@ class SafetyResult(NamedTuple):
 
 # Tools that are always safe — no confirmation needed
 SAFE_TOOLS = {
-    "open_browser", "navigate_url", "google_search", "youtube_search",
+    "open_browser", "navigate_url", "google_search", "youtube_search", "youtube_play",
     "open_app", "take_screenshot", "list_files", "read_file",
     "press_key", "set_volume", "open_file", "find_file",
-    "read_pdf", "summarize", "summarize_codebase", "answer_question",
+    "read_pdf", "summarize", "summarize_codebase", "save_summary_file", "answer_question",
+    "search_mail", "read_mail", "open_gmail", "read_gmail",
 }
 
 # Tools that need explicit user confirmation before running
@@ -35,6 +36,7 @@ CONFIRM_TOOLS = {
     "type_text":    "This will type text into the active window.",
     "click":        "This will click somewhere on your screen.",
     "computer_use": "This will control your mouse and keyboard autonomously to complete the task — like a human using the computer.",
+    "web_browse":   "This will open a web browser (Playwright) and load pages to complete the task.",
     "delete_file":  "⚠ This will permanently delete a file.",
 }
 

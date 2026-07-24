@@ -9,17 +9,24 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import time
 from pathlib import Path
 
+from agent.telemetry import track
+
 log = logging.getLogger("intellivox.computer_use")
 
-# Vision model — must support images in Ollama (e.g. llama3.2-vision, moondream)
-VISION_MODEL = "llama3.2-vision"
+# Vision model — must support images in Ollama (e.g. llama3.2-vision, llava, moondream)
+VISION_MODEL = os.getenv("INTELLIVOX_VISION_MODEL", "llama3.2-vision")
 MAX_STEPS = 20
 ACTION_DELAY = 0.8  # seconds after each action for UI to update
+
+
+class VisionModelError(Exception):
+    """Raised when the Ollama vision model is missing or unreachable."""
 
 SYSTEM_PROMPT = """You are a computer-use agent controlling a macOS desktop.
 You receive screenshots and must complete the user's goal step by step.
@@ -175,10 +182,23 @@ def _ask_vision(image_path: str, goal: str, history: list[str], step: int, width
         log.debug("Vision raw: %s", raw[:300])
         return _parse_decision(raw)
     except Exception as e:
+        err = str(e)
+        if "not found" in err.lower() or "404" in err:
+            raise VisionModelError(
+                f"Vision model '{VISION_MODEL}' is not installed. "
+                f"Run: ollama pull {VISION_MODEL}"
+            ) from e
+        if "mllama" in err.lower() or "unknown model architecture" in err.lower():
+            raise VisionModelError(
+                f"Vision model '{VISION_MODEL}' cannot load on this Ollama build "
+                f"(architecture error). Try: ollama pull llava:7b && "
+                f"export INTELLIVOX_VISION_MODEL=llava:7b"
+            ) from e
         log.error("Vision model error: %s", e)
         return None
 
 
+@track(name="computer_use", project_name="intellivox", tags=["vision", "agent"])
 def run_computer_task(goal: str, max_steps: int = MAX_STEPS) -> dict:
     """
     Autonomous loop: screenshot → vision LLM → action → repeat.
@@ -191,17 +211,28 @@ def run_computer_task(goal: str, max_steps: int = MAX_STEPS) -> dict:
     history: list[str] = []
     step_log: list[dict] = []
 
-    log.info("Computer use task: %r", goal)
+    log.info("Computer use task: %r (vision model: %s)", goal, VISION_MODEL)
 
     for step in range(max_steps):
         image_path, err = _capture_screenshot()
         if err:
             return {"success": False, "message": err, "steps": step, "log": step_log}
 
-        decision = _ask_vision(image_path, goal, history, step, width, height)
+        try:
+            decision = _ask_vision(image_path, goal, history, step, width, height)
+        except VisionModelError as e:
+            return {"success": False, "message": str(e), "steps": step, "log": step_log}
+
         if not decision:
             history.append("error: could not parse model response")
             step_log.append({"step": step + 1, "error": "parse failed"})
+            if step >= 2:
+                return {
+                    "success": False,
+                    "message": "Vision model returned unparseable responses repeatedly.",
+                    "steps": step + 1,
+                    "log": step_log,
+                }
             continue
 
         thought = decision.get("thought", "")

@@ -4,10 +4,13 @@ Tool registry — maps tool names to callables.
 """
 import os
 from pathlib import Path
-from .browser import open_browser, navigate_url, google_search, youtube_search
+from .browser import open_browser, navigate_url, google_search, youtube_search, youtube_play
 from .desktop import open_app, close_app, type_text, press_key, click, take_screenshot, set_volume
 from .files   import list_files, read_file, write_file, delete_file, move_file, open_file, find_file
-from .document import read_pdf, summarize, answer_question, summarize_codebase
+from .document import read_pdf, summarize, answer_question, summarize_codebase, save_summary_file
+from .mail import search_mail, read_mail
+from .gmail import open_gmail, read_gmail
+from .web_playwright import web_browse
 from .computer import computer_use
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
@@ -17,6 +20,7 @@ TOOLS = {
     "navigate_url":    navigate_url,
     "google_search":   google_search,
     "youtube_search":  youtube_search,
+    "youtube_play":    youtube_play,
 
     # Desktop
     "open_app":        open_app,
@@ -40,7 +44,17 @@ TOOLS = {
     "read_pdf":        read_pdf,
     "summarize":       summarize,
     "summarize_codebase": summarize_codebase,
+    "save_summary_file": save_summary_file,
     "answer_question": answer_question,
+
+    # Mail
+    "search_mail":     search_mail,
+    "read_mail":       read_mail,
+    "open_gmail":      open_gmail,
+    "read_gmail":      read_gmail,
+
+    # Web automation (Playwright)
+    "web_browse":      web_browse,
 
     # General computer control (vision + mouse/keyboard loop)
     "computer_use":    computer_use,

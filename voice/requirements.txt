@@ -4,7 +4,9 @@
 #   • Python 3.11+ (3.13 tested)
 #   • ffmpeg          — brew install ffmpeg  /  apt install ffmpeg
 #   • Ollama          — https://ollama.com  +  ollama pull llama3.1
-#   • Vision (computer_use): ollama pull llama3.2-vision
+#   • Vision (computer_use): ollama pull llava:7b   ← recommended if llama3.2-vision fails
+#     export INTELLIVOX_VISION_MODEL=llava:7b
+#     Alternative: ollama pull llama3.2-vision  (needs Ollama with mllama support)
 #
 # Setup:
 #   cd voice
@@ -15,6 +17,13 @@
 #
 # macOS permissions (System Settings → Privacy & Security):
 #   • Microphone, Screen Recording, Accessibility, Automation
+
+# ── Browser / YouTube ─────────────────────────────────────────────────────────
+yt-dlp>=2024.1.0
+
+# ── Web automation (Playwright) ───────────────────────────────────────────────
+playwright>=1.49.0
+# After pip install: playwright install chromium
 
 # ── Web server ────────────────────────────────────────────────────────────────
 fastapi==0.139.2
@@ -47,3 +56,6 @@ pillow==12.3.0
 
 # ── Optional: live mic test script (voice/test_whisper.py) ───────────────────
 sounddevice==0.5.5
+
+# ── Observability (Comet Opik — optional, set OPIK_DISABLED=true to skip) ───
+opik>=1.0.0

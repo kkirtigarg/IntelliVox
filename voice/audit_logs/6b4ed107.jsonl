@@ -1,0 +1,6 @@
+{"type": "transcript", "text": "Open Google Chrome", "language": "id", "duration_ms": 5863.4, "ts": "2026-07-24T14:58:54.783283+00:00"}
+{"type": "transcript", "text": "Open Google Chrome, search YouTube for Jhingat Song and play the first video.", "language": "en", "duration_ms": 9397.2, "ts": "2026-07-24T14:59:18.538229+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the Google Chrome application on your Mac.", "steps": [{"tool": "open_app", "args": {"name": "Google Chrome"}}], "clarification_needed": false, "clarification_question": null}, "duration_ms": 24197.0, "ts": "2026-07-24T14:59:18.981369+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T14:59:19.024625+00:00"}
+{"type": "plan", "plan": {"intent": "open_youtube_video", "explanation": "Opening Google Chrome to search for 'Jhingat Song' on YouTube and playing the first video.", "steps": [{"tool": "computer_use", "args": {"goal": "Open Chrome, search YouTube for Jhingat Song, click the first video, and play it"}}], "clarification_needed": false, "clarification_question": null}, "duration_ms": 6860.9, "ts": "2026-07-24T14:59:25.403121+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T14:59:25.404191+00:00"}

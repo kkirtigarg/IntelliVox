@@ -7,6 +7,8 @@ import os
 import re
 from pathlib import Path
 
+from agent.telemetry import track
+
 log = logging.getLogger("intellivox.document")
 
 HOME = str(Path.home())
@@ -70,6 +72,7 @@ def read_pdf(path: str) -> dict:
 
 # ── LLM-powered summarization ─────────────────────────────────────────────────
 
+@track(name="summarize", project_name="intellivox", tags=["llm"])
 def summarize(text: str, style: str = "concise") -> dict:
     """
     Summarize a block of text using the local Ollama LLM.
@@ -101,6 +104,7 @@ def summarize(text: str, style: str = "concise") -> dict:
         return {"success": False, "message": f"Summarization failed: {e}"}
 
 
+@track(name="summarize_codebase", project_name="intellivox", tags=["llm"])
 def summarize_codebase(directory: str = "", style: str = "bullets", path: str = "") -> dict:
     """
     Read source files in a project folder and summarize the codebase.
@@ -182,6 +186,50 @@ def summarize_codebase(directory: str = "", style: str = "bullets", path: str = 
         }
     except Exception as e:
         return {"success": False, "message": f"Codebase summarization failed: {e}"}
+
+
+def save_summary_file(
+    summary: str,
+    path: str = "",
+    filename: str = "",
+    directory: str = "~/Desktop",
+) -> dict:
+    """
+    Save a summary to a .txt file in Desktop, Documents, or Downloads.
+    Returns: { success, message, path }
+    """
+    if not summary or not str(summary).strip():
+        return {"success": False, "message": "No summary text to save"}
+
+    safe_dirs = [
+        os.path.join(HOME, "Desktop"),
+        os.path.join(HOME, "Documents"),
+        os.path.join(HOME, "Downloads"),
+    ]
+
+    if path:
+        out = str(Path(path).expanduser())
+    else:
+        name = filename or "codebase-summary.txt"
+        if not name.lower().endswith(".txt"):
+            name = f"{name}.txt"
+        out = str(Path(directory).expanduser() / name)
+
+    out = str(Path(out).resolve())
+    if not any(out.startswith(base) for base in safe_dirs):
+        return {
+            "success": False,
+            "message": "Can only save summary files to Desktop, Documents, or Downloads",
+        }
+
+    try:
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(str(summary).strip() + "\n")
+        log.info("Saved summary to %s", out)
+        return {"success": True, "message": f"Saved summary to {out}", "path": out}
+    except OSError as e:
+        return {"success": False, "message": f"Could not save file: {e}"}
 
 
 def answer_question(text: str, question: str) -> dict:

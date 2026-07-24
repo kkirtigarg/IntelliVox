@@ -116,7 +116,12 @@ function useAgentVoice() {
         break;
 
       case 'info':
-        setStatusText(msg.text);
+        if ((msg.text || '').toLowerCase().includes('cancelled')) {
+          setPhase('error');
+          setErrorMsg(msg.text);
+        } else {
+          setStatusText(msg.text);
+        }
         break;
     }
   };
@@ -349,7 +354,7 @@ export default function App() {
             {PHASE_LABEL[phase] || phase}
           </span>
           <div className={`status-text ${isProcessing ? 'thinking' : ''} ${isError ? 'error-text' : ''}`}>
-            {isError ? errorMsg : isClarify ? statusText : statusText || (phase === 'idle' ? 'Tap the mic or press Space' : '')}
+            {isError ? errorMsg : isClarify ? statusText : statusText || (phase === 'idle' ? 'Tap the mic or press Space · English only' : '')}
           </div>
         </div>
 
@@ -361,7 +366,12 @@ export default function App() {
               <div className="transcript-label">
                 <div className="transcript-dot" style={{background: isListening ? '#06b6d4' : '#a78bfa'}} />
                 You said
-                {language && (
+                {(language === 'en' || !language) && (
+                  <span style={{marginLeft:'auto',fontSize:'0.8em',opacity:0.7}}>
+                    🇺🇸 English
+                  </span>
+                )}
+                {language && language !== 'en' && (
                   <span style={{marginLeft:'auto',fontSize:'0.8em'}}>
                     {LANG_FLAGS[language] || '🌐'} {language}
                   </span>
