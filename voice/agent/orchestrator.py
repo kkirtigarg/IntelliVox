@@ -8,6 +8,7 @@ Message protocol (server → client):
   { "type": "plan",          "intent": "...", "explanation": "...", "steps": [...] }
   { "type": "safety_block",  "text": "I can't do that: ..." }
   { "type": "confirm",       "text": "About to X — OK?", "tool": "...", "step_index": 0 }
+  { "type": "disambiguate",  "text": "Found N files named X…", "options": ["/path/1", ...] }
   { "type": "executing",     "step_index": 0, "tool": "...", "text": "Opening Chrome..." }
   { "type": "step_done",     "step_index": 0, "verified": true, "text": "Chrome opened ✓" }
   { "type": "step_failed",   "step_index": 0, "text": "Failed: ..." }
@@ -18,6 +19,7 @@ Message protocol (server → client):
 Message protocol (client → server):
   Binary: raw audio blob (webm/opus) → triggers transcription + agent
   Text:   "confirm:yes"  or  "confirm:no"  → for confirmation prompts
+  Text:   "choose:N"     → pick option N (0-based) from a disambiguate prompt
   Text:   "cancel"  → abort current task
   Text:   "pause"   → pause after current step
   Text:   "resume"  → resume paused task
@@ -137,9 +139,11 @@ class AgentSession:
         self.audit      = AuditSession(self.session_id)
         self._paused    = False
         self._cancelled = False
-        self._confirm_event  = asyncio.Event()
-        self._confirm_result = None
-        self.history_turns   = []
+        self._confirm_event       = asyncio.Event()
+        self._confirm_result      = None
+        self._disambiguate_event  = asyncio.Event()
+        self._disambiguate_result = None
+        self.history_turns        = []
 
     async def send(self, msg: dict):
         await self.ws.send_text(json.dumps(msg))
@@ -162,6 +166,13 @@ class AgentSession:
             answer = text.split(":", 1)[1].strip()
             self._confirm_result = (answer == "yes")
             self._confirm_event.set()
+        elif text.startswith("choose:"):
+            idx_str = text.split(":", 1)[1].strip()
+            try:
+                self._disambiguate_result = int(idx_str)
+            except ValueError:
+                self._disambiguate_result = 0
+            self._disambiguate_event.set()
 
     async def wait_for_confirmation(self) -> bool:
         """Wait until the user sends confirm:yes or confirm:no."""
@@ -172,6 +183,16 @@ class AgentSession:
             return bool(self._confirm_result)
         except asyncio.TimeoutError:
             return False  # treat timeout as "no"
+
+    async def wait_for_choice(self) -> int | None:
+        """Wait until the user sends choose:N (0-based index). Returns None on timeout."""
+        self._disambiguate_event.clear()
+        self._disambiguate_result = None
+        try:
+            await asyncio.wait_for(self._disambiguate_event.wait(), timeout=30.0)
+            return self._disambiguate_result
+        except asyncio.TimeoutError:
+            return None
 
     async def run_task(self, transcript_result: dict):
         """Full pipeline: transcript → plan → safety → execute → verify."""
@@ -289,9 +310,28 @@ class AgentSession:
             if result.get("success") and verified:
                 done_msg = verification.get("message", f"{tool} done")
 
-                # find_file: inject path into next pdf/file step
+                # find_file: disambiguate if multiple matches, then inject path into next step
                 if tool == "find_file" and result.get("path"):
                     found_path = result["path"]
+                    matches = result.get("matches", [])
+
+                    if len(matches) > 1:
+                        file_name = args.get("name", "file")
+                        await self.send({
+                            "type":    "disambiguate",
+                            "text":    f"Found {len(matches)} files named '{file_name}'. Which one do you mean?",
+                            "options": matches,
+                        })
+                        tts.speak(f"I found {len(matches)} files with that name. Please choose which one.")
+
+                        chosen_idx = await self.wait_for_choice()
+                        if chosen_idx is not None and 0 <= chosen_idx < len(matches):
+                            found_path = matches[chosen_idx]
+                            log.info("[%s] user chose match %d: %s", self.session_id, chosen_idx, found_path)
+                        else:
+                            await self.send({"type": "info", "text": "No selection made. Using first match."})
+                            log.info("[%s] disambiguation timed out, using first match", self.session_id)
+
                     import os as _os
                     done_msg = f"Found: {_os.path.basename(found_path)}"
                     log.info("[%s] find_file -> %s", self.session_id, found_path)
