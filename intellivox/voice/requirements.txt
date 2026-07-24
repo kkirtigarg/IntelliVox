@@ -35,6 +35,7 @@ PyAutoGUI==0.9.54
 pyperclip==1.11.0
 pyobjc==12.2.1; sys_platform == "darwin"
 pycaw==20240210; sys_platform == "win32"      # volume control (set_volume)
+uiautomation==2.0.20; sys_platform == "win32" # optional: reads Chrome's address bar for contextual memory (voice/src)
 
 # ── Documents (PDF read / summarize) ──────────────────────────────────────────
 pdfplumber==0.11.10

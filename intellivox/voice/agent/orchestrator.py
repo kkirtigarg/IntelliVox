@@ -44,6 +44,7 @@ from agent.tools import run_tool
 from agent.verifier import verify_step
 from agent.audit import AuditSession
 from automation.fuzzy import correct_transcript
+from src.connectors import memory_connector, planner_memory_connector
 
 logging.basicConfig(
     level=logging.INFO,
@@ -120,6 +121,7 @@ class AgentSession:
         self.ws         = ws
         self.session_id = str(uuid.uuid4())[:8]
         self.audit      = AuditSession(self.session_id)
+        self.memory     = memory_connector.get_or_create_session(self.session_id)
         self._paused    = False
         self._cancelled = False
         self._confirm_event  = asyncio.Event()
@@ -182,13 +184,36 @@ class AgentSession:
 
         self.audit.log_transcript(raw_text, language)
         log.info("[%s] Transcript [%s]: %s", self.session_id, language, text)
+        self.memory.note_command(text)
 
         # ── 1. Plan ──────────────────────────────────────────────────────────
         await self.send({"type": "planning", "text": "Figuring out your task…"})
         tts.speak("Let me figure that out.")
 
         loop = asyncio.get_event_loop()
-        action_plan = await loop.run_in_executor(None, plan, text)
+
+        # Contextual memory: go back / repeat / resume / continue / reset are
+        # handled from Session Memory, bypassing the LLM planner entirely.
+        meta_plan = self.memory.handle_meta_command(text)
+        if meta_plan and meta_plan.get("_control") == "resume":
+            self._paused = False
+            await self.send({"type": "info", "text": "Resuming…"})
+            tts.speak("Resuming.")
+            return
+
+        if meta_plan:
+            action_plan = meta_plan
+        else:
+            clarify_q = planner_memory_connector.needs_clarification(self.memory, text)
+            if clarify_q:
+                action_plan = {
+                    "intent": "clarify", "explanation": "", "steps": [],
+                    "clarification_needed": True, "clarification_question": clarify_q,
+                }
+            else:
+                context = planner_memory_connector.build_context(self.memory)
+                action_plan = await loop.run_in_executor(None, plan, text, context)
+
         self.audit.log_plan(action_plan)
 
         if action_plan.get("clarification_needed"):
@@ -206,6 +231,12 @@ class AgentSession:
         })
 
         steps = action_plan.get("steps", [])
+        if action_plan.get("_reset_after") and not steps:
+            self.memory.reset()
+            await self.send({"type": "done", "text": "Nothing was active. Session memory cleared."})
+            tts.speak("Session reset.")
+            self.audit.log_outcome("success", "Session reset (nothing active).")
+            return
         if not steps:
             await self.send({"type": "error", "text": "I couldn't figure out what to do."})
             return
@@ -215,6 +246,7 @@ class AgentSession:
         step_results = []   # stores each step's raw result for chaining
         for i, step in enumerate(steps):
             if self._cancelled:
+                self.memory.save_pending(steps[i:])
                 await self.send({"type": "info", "text": "Task cancelled."})
                 self.audit.log_outcome("cancelled", "User cancelled the task.")
                 tts.speak("Task cancelled.")
@@ -277,6 +309,7 @@ class AgentSession:
             self.audit.log_action(tool, args, result, verified)
 
             if result.get("success") and verified:
+                self.memory.record_success(tool, args, result)
                 done_msg = verification.get("message", f"{tool} done")
 
                 # find_file: inject path into next pdf/file step
@@ -336,6 +369,9 @@ class AgentSession:
             tts.speak("All done!")
         self.audit.log_outcome("success" if completed == len(steps) else "partial", summary_msg)
         log.info("[%s] Task complete: %s", self.session_id, summary_msg)
+
+        if action_plan.get("_reset_after"):
+            self.memory.reset()
 
 
 def _describe_step(tool: str, args: dict) -> str:
@@ -422,6 +458,7 @@ async def ws_endpoint(ws: WebSocket):
                 await session.handle_control(msg["text"])
 
     except WebSocketDisconnect:
+        memory_connector.remove_session(session.session_id)
         log.info("Client disconnected [%s]", session.session_id)
 
 
