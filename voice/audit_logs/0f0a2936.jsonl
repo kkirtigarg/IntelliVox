@@ -1,0 +1,2 @@
+{"type": "transcript", "text": "Open notepad", "language": "en", "ts": "2026-07-24T16:47:53.946326+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening 'notepad' application on Linux desktop.", "steps": [{"tool": "open_app", "args": {"name": "notepad"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T16:49:49.829959+00:00"}

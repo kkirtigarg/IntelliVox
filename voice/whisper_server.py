@@ -75,7 +75,8 @@ def webm_to_pcm(data: bytes) -> np.ndarray:
 
 
 def transcribe(audio: np.ndarray) -> dict:
-    segments, info = model.transcribe(audio, beam_size=5)
+    # Force English — auto-detect often mislabels Indian-accent English as Hindi
+    segments, info = model.transcribe(audio, beam_size=5, language="en")
     text = " ".join(s.text.strip() for s in segments).strip()
     return {
         "transcript": text,

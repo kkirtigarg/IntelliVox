@@ -2,9 +2,18 @@
 #
 # Prerequisites (install separately):
 #   • Python 3.11+ (3.13 tested)
-#   • ffmpeg          — brew install ffmpeg  /  apt install ffmpeg
+#   • ffmpeg
+#       macOS:  brew install ffmpeg
+#       Linux:  sudo pacman -S ffmpeg   /   sudo apt install ffmpeg
 #   • Ollama          — https://ollama.com  +  ollama pull llama3.1
 #   • Vision (computer_use): ollama pull llama3.2-vision
+#
+# Linux extras (recommended for desktop control on X11):
+#   • xdg-utils, imagemagick (import), pactl/pulseaudio-utils, wmctrl
+#       Manjaro/Arch: sudo pacman -S xdg-utils imagemagick libpulse wmctrl
+#       Debian/Ubuntu: sudo apt install xdg-utils imagemagick pulseaudio-utils wmctrl
+#   • Optional: xdotool (better frontmost-window detection), scrot
+#   • pyttsx3 needs espeak-ng: sudo pacman -S espeak-ng  /  sudo apt install espeak-ng
 #
 # Setup:
 #   cd voice
@@ -15,6 +24,10 @@
 #
 # macOS permissions (System Settings → Privacy & Security):
 #   • Microphone, Screen Recording, Accessibility, Automation
+#
+# Linux notes:
+#   • Works best on X11. On Wayland, screenshots/automation may need grim + portal permissions.
+#   • Grant your terminal/app access to input devices if the DE prompts for it.
 
 # ── Web server ────────────────────────────────────────────────────────────────
 fastapi==0.139.2
@@ -33,6 +46,7 @@ httpx==0.28.1
 # ── Desktop automation (computer_use, click, type) ───────────────────────────
 PyAutoGUI==0.9.54
 pyperclip==1.11.0
+python-xlib==0.33; sys_platform == "linux"
 pyobjc==12.2.1; sys_platform == "darwin"
 
 # ── Documents (PDF read / summarize) ──────────────────────────────────────────

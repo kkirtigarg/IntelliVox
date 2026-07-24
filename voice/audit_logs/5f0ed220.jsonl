@@ -1,0 +1,4 @@
+{"type": "transcript", "text": "Open notepad app", "language": "en", "ts": "2026-07-24T16:35:00.512292+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand 'Open notepad app'. Could you rephrase it?"}, "ts": "2026-07-24T16:35:01.190020+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand 'Open notepad app'. Could you rephrase it?", "ts": "2026-07-24T16:35:01.190483+00:00"}
+{"type": "transcript", "text": "Open notepad.", "language": "en", "ts": "2026-07-24T16:39:32.093739+00:00"}

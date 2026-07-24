@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import re
-import subprocess
 import time
 from pathlib import Path
+
+from agent import platform as plat
 
 log = logging.getLogger("intellivox.computer_use")
 
@@ -21,36 +22,39 @@ VISION_MODEL = "llama3.2-vision"
 MAX_STEPS = 20
 ACTION_DELAY = 0.8  # seconds after each action for UI to update
 
-SYSTEM_PROMPT = """You are a computer-use agent controlling a macOS desktop.
+_MOD = plat.MOD_KEY  # "command" on macOS, "ctrl" on Linux
+
+SYSTEM_PROMPT = f"""You are a computer-use agent controlling a {plat.OS_NAME} desktop.
 You receive screenshots and must complete the user's goal step by step.
 
 Respond with ONLY valid JSON (no markdown fences):
-{
+{{
   "thought": "brief reasoning about what you see and what to do next",
   "action": "click|double_click|type|press|scroll|wait|done|fail",
-  "args": {},
+  "args": {{}},
   "done": false
-}
+}}
 
 Actions and args:
-- click:       {"x": <int>, "y": <int>}           — pixel coordinates on screen
-- double_click:{"x": <int>, "y": <int>}
-- type:        {"text": "<string>"}                 — types into focused field
-- press:       {"key": "enter"|"space"|"tab"|"cmd+l"|"cmd+t"|"esc"|...}
-- scroll:      {"clicks": <int>}                   — positive=up, negative=down
-- wait:        {"seconds": <float>}                 — wait for page/load
-- done:        {"message": "<what was accomplished>"} — goal complete, set done=true
-- fail:        {"message": "<why impossible>"}      — cannot continue, set done=true
+- click:       {{"x": <int>, "y": <int>}}           — pixel coordinates on screen
+- double_click:{{"x": <int>, "y": <int>}}
+- type:        {{"text": "<string>"}}                 — types into focused field
+- press:       {{"key": "enter"|"space"|"tab"|"{_MOD}+l"|"{_MOD}+t"|"esc"|...}}
+- scroll:      {{"clicks": <int>}}                   — positive=up, negative=down
+- wait:        {{"seconds": <float>}}                 — wait for page/load
+- done:        {{"message": "<what was accomplished>"}} — goal complete, set done=true
+- fail:        {{"message": "<why impossible>"}}      — cannot continue, set done=true
 
 Rules:
 1. Use ONLY coordinates visible in the screenshot. Screen size is given each turn.
 2. One action per turn. Observe the result in the next screenshot before continuing.
 3. For web tasks: click search boxes, type queries, press enter, click first result, click play.
 4. For YouTube: search → click first video thumbnail → video usually autoplays; or click play button.
-5. If a browser address bar is needed, press cmd+l then type URL/query.
+5. If a browser address bar is needed, press {_MOD}+l then type URL/query.
 6. Set done=true only when the user's goal is clearly achieved.
 7. Prefer clicking visible buttons/links over blind keyboard shortcuts.
 8. If stuck after several attempts, use action "fail" with explanation.
+9. Keyboard modifier on this OS is "{_MOD}" (not cmd/command unless you are on macOS).
 """
 
 
@@ -66,12 +70,8 @@ def _screen_size() -> tuple[int, int]:
 def _capture_screenshot() -> tuple[str | None, str | None]:
     """Return (path, error)."""
     tmp = Path("/tmp/intellivox_cu_screen.png")
-    result = subprocess.run(
-        ["screencapture", "-x", "-t", "png", str(tmp)],
-        capture_output=True,
-    )
-    if result.returncode != 0 or not tmp.exists():
-        return None, "screencapture failed — grant Screen Recording permission"
+    if not plat.take_screenshot(str(tmp)):
+        return None, "Screenshot failed — install imagemagick/scrot or grant screen access"
     return str(tmp), None
 
 
@@ -103,13 +103,13 @@ def _execute_action(action: str, args: dict) -> dict:
             try:
                 import pyperclip
                 pyperclip.copy(text)
-                pyautogui.hotkey("command", "v")
+                pyautogui.hotkey(plat.MOD_KEY, "v")
             except Exception:
                 pyautogui.write(text, interval=0.03)
             return {"success": True, "message": f"Typed {len(text)} chars"}
 
         if action == "press":
-            key = str(args.get("key", "enter")).lower()
+            key = plat.normalize_hotkey(str(args.get("key", "enter")))
             keys = [k.strip() for k in key.split("+")]
             if len(keys) == 1:
                 pyautogui.press(keys[0])

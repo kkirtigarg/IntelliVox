@@ -18,12 +18,16 @@ def _get_engine():
             _engine = pyttsx3.init()
             _engine.setProperty("rate",   185)   # words per minute
             _engine.setProperty("volume", 0.9)
-            # Try to use a natural-sounding voice
-            voices = _engine.getProperty("voices")
-            for v in voices:
-                if "samantha" in v.name.lower() or "karen" in v.name.lower():
-                    _engine.setProperty("voice", v.id)
-                    break
+            # Prefer a natural English voice (macOS or Linux espeak/festival)
+            voices = _engine.getProperty("voices") or []
+            preferred = ("samantha", "karen", "english", "en-us", "en_us", "default")
+            for pref in preferred:
+                for v in voices:
+                    label = f"{getattr(v, 'name', '')} {getattr(v, 'id', '')}".lower()
+                    if pref in label:
+                        _engine.setProperty("voice", v.id)
+                        return _engine
+
         except Exception as e:
             log.warning("TTS init failed: %s", e)
     return _engine

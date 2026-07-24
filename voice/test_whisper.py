@@ -56,8 +56,8 @@ def record_until_enter() -> np.ndarray:
 
 def transcribe_once(model, audio):
     print("Transcribing ...")
-    segments, info = model.transcribe(audio, beam_size=5)
-    print(f"Detected language: {info.language!r} ({info.language_probability:.0%})\n")
+    segments, info = model.transcribe(audio, beam_size=5, language="en")
+    print(f"Language: {info.language!r} ({info.language_probability:.0%})\n")
     print("─" * 50)
     full = []
     for seg in segments:
@@ -135,7 +135,7 @@ def live_mode(model):
                     silent_chunks = 0
                     has_speech = False
 
-                    segments, info = model.transcribe(audio, beam_size=5)
+                    segments, info = model.transcribe(audio, beam_size=5, language="en")
                     text = " ".join(s.text.strip() for s in segments).strip()
                     if text:
                         print(f"[{info.language}]  {text}")

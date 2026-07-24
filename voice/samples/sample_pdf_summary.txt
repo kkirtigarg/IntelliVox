@@ -1,0 +1,16 @@
+Sample PDF Summary (Instance A)
+================================
+
+This file stands in for a summary produced from a real PDF via read_pdf → summarize.
+Use it with dummy_document.txt when testing pairwise comparison offline.
+
+Document: Example Event Brief (synthetic)
+Summary:
+• Describes a technology hackathon focused on talent discovery
+• Covers eligibility, team size limits, and submission deadlines
+• Lists prize tiers and judging criteria (innovation, impact, demo quality)
+• Mentions partner sponsors and networking sessions for recruiters
+• Includes a short FAQ on IP ownership and remote participation
+
+Note: This is not extracted from a live PDF; it mimics the shape of a
+PDF-summary instance so compare_documents can run against the dummy file.

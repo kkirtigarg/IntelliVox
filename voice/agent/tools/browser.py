@@ -2,49 +2,24 @@
 agent/tools/browser.py
 Browser and URL control tools.
 """
-import subprocess
-import webbrowser
 import urllib.parse
+
+from agent import platform as plat
 
 
 def open_browser(browser: str = "chrome") -> dict:
     """Open a browser application."""
-    browser_map = {
-        "chrome": "Google Chrome",
-        "firefox": "Firefox",
-        "safari": "Safari",
-        "edge": "Microsoft Edge",
-    }
-    app_name = browser_map.get(browser.lower(), "Google Chrome")
-    script = f'tell application "{app_name}" to activate'
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-    if result.returncode == 0:
-        return {"success": True, "message": f"Opened {app_name}"}
-    return {"success": False, "message": result.stderr.strip()}
+    # Prefer chrome/brave/firefox aliases; fall back to default browser via empty open
+    result = plat.open_app(browser)
+    if result.get("success"):
+        return result
+    # Default browser via opening a blank page
+    return plat.open_url("about:blank")
 
 
 def navigate_url(url: str, browser: str = "chrome") -> dict:
     """Navigate to a URL in the specified browser."""
-    # Ensure URL has scheme
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    browser_map = {
-        "chrome": "Google Chrome",
-        "firefox": "Firefox",
-        "safari": "Safari",
-    }
-    app_name = browser_map.get(browser.lower(), "Google Chrome")
-    script = f'''
-    tell application "{app_name}"
-        activate
-        open location "{url}"
-    end tell
-    '''
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-    if result.returncode == 0:
-        return {"success": True, "message": f"Navigated to {url}"}
-    return {"success": False, "message": result.stderr.strip()}
+    return plat.open_url(url, browser=browser)
 
 
 def google_search(query: str, browser: str = "chrome") -> dict:

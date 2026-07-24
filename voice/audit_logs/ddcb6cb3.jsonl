@@ -1,0 +1,12 @@
+{"type": "transcript", "text": "Open notepad", "language": "en", "ts": "2026-07-24T16:30:17.178436+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the 'notepad' application with default settings.", "steps": [{"tool": "open_app", "args": {"name": "notepad"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T16:31:04.702337+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "notepad"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T16:31:04.702714+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "notepad"}, "result": {"success": true, "message": "Opened mousepad"}, "verified": false, "ts": "2026-07-24T16:31:40.439374+00:00"}
+{"type": "error", "message": "Opened mousepad", "ts": "2026-07-24T16:31:40.440134+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T16:31:40.440223+00:00"}
+{"type": "transcript", "text": "Open Firefox and open Google in it and search youtube.com", "language": "en", "ts": "2026-07-24T16:32:00.637510+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand 'Open Firefox and open Google in it and search youtube.com'. Could you rephrase it?"}, "ts": "2026-07-24T16:32:02.119050+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand 'Open Firefox and open Google in it and search youtube.com'. Could you rephrase it?", "ts": "2026-07-24T16:32:02.119560+00:00"}
+{"type": "transcript", "text": "Open Firefox and open Google on it.", "language": "en", "ts": "2026-07-24T16:32:23.999058+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand 'Open Firefox and open Google on it.'. Could you rephrase it?"}, "ts": "2026-07-24T16:32:24.633246+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand 'Open Firefox and open Google on it.'. Could you rephrase it?", "ts": "2026-07-24T16:32:24.633775+00:00"}

@@ -105,7 +105,8 @@ def webm_to_pcm(data: bytes) -> np.ndarray:
 
 
 def transcribe(audio: np.ndarray) -> dict:
-    segments, info = whisper_model.transcribe(audio, beam_size=5)
+    # Force English — auto-detect often mislabels Indian-accent English as Hindi
+    segments, info = whisper_model.transcribe(audio, beam_size=5, language="en")
     text = " ".join(s.text.strip() for s in segments).strip()
     return {"text": text, "language": info.language, "confidence": round(info.language_probability, 2)}
 
@@ -265,7 +266,7 @@ class AgentSession:
             if result.get("success") and verified:
                 done_msg = verification.get("message", f"{tool} done")
 
-                # find_file: inject path into next pdf/file step
+                # find_file: inject path into next pdf/file/compare step
                 if tool == "find_file" and result.get("path"):
                     found_path = result["path"]
                     import os as _os
@@ -279,6 +280,8 @@ class AgentSession:
                             ns["args"].pop("path", None)
                         elif next_tool in ("open_file", "read_pdf", "read_file"):
                             ns["args"]["path"] = found_path
+                        elif next_tool == "compare_pdf_with_dummy":
+                            ns["args"]["pdf_path"] = found_path
 
                 # read_pdf: inject text into next summarize/answer step
                 elif tool == "read_pdf" and result.get("text"):
@@ -289,12 +292,56 @@ class AgentSession:
                         if ns.get("tool") in ("summarize", "answer_question"):
                             ns["args"]["text"] = result["text"]
 
-                # summarize / summarize_codebase: display full summary in UI + speak excerpt
-                elif tool in ("summarize", "summarize_codebase") and result.get("summary"):
-                    if tool == "summarize_codebase":
-                        done_msg = f"Summarized {result.get('files_read', '?')} files"
-                    else:
-                        done_msg = "Summary complete"
+                # summarize: inject into next compare/write; show in UI
+                elif tool == "summarize" and result.get("summary"):
+                    done_msg = "Summary complete"
+                    await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
+                    short = result["summary"][:220].replace("\n", " ").strip()
+                    tts.speak(short)
+                    if i + 1 < len(steps):
+                        ns = steps[i + 1]
+                        if ns.get("tool") == "compare_documents":
+                            # Prefer filling the first empty text slot
+                            if not ns["args"].get("text_a"):
+                                ns["args"]["text_a"] = result["summary"]
+                                ns["args"].setdefault("label_a", "PDF Summary")
+                            elif not ns["args"].get("text_b"):
+                                ns["args"]["text_b"] = result["summary"]
+                                ns["args"].setdefault("label_b", "PDF Summary")
+                        elif ns.get("tool") == "write_file" and not ns["args"].get("content"):
+                            ns["args"]["content"] = result["summary"]
+
+                # summarize_codebase: display full summary in UI + speak excerpt
+                elif tool == "summarize_codebase" and result.get("summary"):
+                    done_msg = f"Summarized {result.get('files_read', '?')} files"
+                    await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
+                    short = result["summary"][:220].replace("\n", " ").strip()
+                    tts.speak(short)
+
+                # create_dummy_file: inject content into next compare step
+                elif tool == "create_dummy_file" and result.get("content"):
+                    done_msg = f"Dummy file ready: {result.get('path', '')}"
+                    if i + 1 < len(steps):
+                        ns = steps[i + 1]
+                        if ns.get("tool") == "compare_documents":
+                            if not ns["args"].get("text_b"):
+                                ns["args"]["text_b"] = result["content"]
+                                ns["args"].setdefault("label_b", "Dummy Document")
+                            elif not ns["args"].get("text_a"):
+                                ns["args"]["text_a"] = result["content"]
+                                ns["args"].setdefault("label_a", "Dummy Document")
+
+                # compare_documents / compare_pdf_with_dummy: show comparison summary
+                elif tool in ("compare_documents", "compare_pdf_with_dummy") and result.get("summary"):
+                    done_msg = "Comparison summary complete"
+                    if tool == "compare_pdf_with_dummy":
+                        parts = []
+                        if result.get("pdf_summary_path"):
+                            parts.append(f"PDF summary → {result['pdf_summary_path']}")
+                        if result.get("dummy_path"):
+                            parts.append(f"Dummy → {result['dummy_path']}")
+                        if parts:
+                            done_msg = "Compared: " + " | ".join(parts)
                     await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
                     short = result["summary"][:220].replace("\n", " ").strip()
                     tts.speak(short)
@@ -338,7 +385,16 @@ def _describe_step(tool: str, args: dict) -> str:
         "find_file":      lambda a: f"🔍 Searching for '{a.get('name', '')}'…",
         "list_files":     lambda a: f"Listing files in {a.get('directory', '~')}…",
         "read_file":      lambda a: f"Reading {a.get('path', '')}…",
+        "read_pdf":       lambda a: f"Reading PDF {a.get('path', '')}…",
+        "summarize":      lambda a: "Summarizing document…",
         "summarize_codebase": lambda a: f"Summarizing code in {a.get('directory', '')}…",
+        "create_dummy_file": lambda a: f"Creating dummy file {a.get('path', '') or 'default'}…",
+        "compare_documents": lambda a: (
+            f"Comparing {a.get('label_a', 'A')} vs {a.get('label_b', 'B')}…"
+        ),
+        "compare_pdf_with_dummy": lambda a: (
+            f"Comparing PDF summary with dummy ({a.get('pdf_path', '')})…"
+        ),
         "computer_use":   lambda a: f"Controlling computer: {a.get('goal', '')[:80]}…",
         "write_file":     lambda a: f"Writing to {a.get('path', '')}…",
         "delete_file":    lambda a: f"Deleting {a.get('path', '')}…",

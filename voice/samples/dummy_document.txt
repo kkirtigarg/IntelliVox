@@ -1,0 +1,23 @@
+IntelliVox Sample Document (Dummy Instance)
+==========================================
+
+Title: Product Overview — Voice Desktop Assistant
+
+Purpose:
+This is a placeholder baseline document used for pairwise comparison
+against a PDF summary. It describes a generic voice-controlled desktop
+assistant that can open apps, search the web, and summarize files.
+
+Key points:
+• Voice input is transcribed locally with Whisper
+• An LLM planner turns speech into tool calls
+• Supported actions include browser, desktop, and file tools
+• Document tools can read PDFs and produce short summaries
+• Safety checks gate destructive actions before they run
+
+Scope (intentionally limited):
+This dummy instance does not include pricing, hiring timelines,
+hackathon rules, or any event-specific details. Those details are
+expected to appear only in the real PDF summary being compared.
+
+Last updated: 2026-07-24

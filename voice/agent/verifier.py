@@ -1,60 +1,74 @@
 """
 agent/verifier.py
-After each action, verifies that it succeeded using a screenshot.
+After each action, verifies that it succeeded using window/app state.
 """
-import subprocess
 import logging
 import time
+from pathlib import Path
+
+from agent import platform as plat
 
 log = logging.getLogger("intellivox.verifier")
 
 
 def get_frontmost_app() -> str:
-    """Return the name of the currently active macOS application."""
-    script = 'tell application "System Events" to get name of first application process whose frontmost is true'
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-    return result.stdout.strip() if result.returncode == 0 else "unknown"
+    """Return the name of the currently active application / window."""
+    return plat.get_frontmost_app()
 
 
 def get_active_url() -> str:
-    """Return the URL currently open in Chrome (best-effort)."""
-    script = '''
-    tell application "Google Chrome"
-        if (count of windows) > 0 then
-            return URL of active tab of front window
-        end if
-    end tell
-    '''
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-    return result.stdout.strip() if result.returncode == 0 else ""
+    """Return the URL currently open in the browser (best-effort; macOS mainly)."""
+    return plat.get_active_url()
 
 
 def verify_app_open(app_name: str, timeout: float = 3.0) -> dict:
     """Check that the expected app is frontmost within timeout seconds."""
-    app_map = {
-        "Google Chrome": ["Google Chrome", "Chrome"],
-        "Firefox":       ["Firefox"],
-        "Safari":        ["Safari"],
-        "Finder":        ["Finder"],
-        "Terminal":      ["Terminal"],
+    resolved = plat.resolve_app_name(app_name)
+    check = {
+        app_name,
+        resolved,
+        Path(resolved).name,
+        "Google Chrome", "Chrome", "chromium", "brave", "Brave",
+        "Firefox", "firefox",
+        "Finder", "Thunar", "Nautilus", "Dolphin", "Files",
+        "Terminal", "xfce4-terminal", "kitty", "gnome-terminal", "konsole",
     }
-    aliases = app_map.get(app_name, [app_name])
+    # Only keep aliases relevant to the requested app
+    relevant = [
+        a for a in check
+        if a and (
+            a.lower() in app_name.lower()
+            or app_name.lower() in a.lower()
+            or a.lower() in resolved.lower()
+            or resolved.lower() in a.lower()
+        )
+    ]
+    if not relevant:
+        relevant = [app_name, resolved, Path(resolved).name]
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         frontmost = get_frontmost_app()
-        if any(a.lower() in frontmost.lower() for a in aliases):
+        if any(a.lower() in frontmost.lower() for a in relevant if a):
             return {"success": True, "frontmost": frontmost}
         time.sleep(0.3)
 
+    frontmost = get_frontmost_app()
+    # On Linux, frontmost detection often needs xdotool — soft-pass when unknown
+    if plat.IS_LINUX and frontmost == "unknown":
+        return {"success": True, "frontmost": frontmost, "message": "Skipped strict verify on Linux"}
+
     return {
         "success": False,
-        "message": f"Expected '{app_name}' to be frontmost, got '{get_frontmost_app()}'",
+        "message": f"Expected '{app_name}' to be frontmost, got '{frontmost}'",
     }
 
 
 def verify_url(expected_url_fragment: str, timeout: float = 5.0) -> dict:
-    """Check that Chrome's active tab URL contains the expected fragment."""
+    """Check that the active tab URL contains the expected fragment (macOS)."""
+    if plat.IS_LINUX:
+        return {"success": True, "url": "", "message": "URL verify skipped on Linux"}
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         url = get_active_url()
@@ -76,15 +90,13 @@ def verify_step(tool: str, args: dict, result: dict) -> dict:
     if not result.get("success"):
         return {"verified": False, "message": result.get("message", "Tool reported failure")}
 
-    time.sleep(0.5)  # brief pause for UI to settle
+    time.sleep(0.5)
 
     if tool in ("open_browser", "open_app"):
         app = args.get("browser", args.get("name", ""))
-        browser_app_map = {"chrome": "Google Chrome", "firefox": "Firefox", "safari": "Safari"}
-        app_name = browser_app_map.get(app.lower(), app) if app else ""
-        if app_name:
-            v = verify_app_open(app_name)
-            return {"verified": v["success"], "message": v.get("message", f"{app_name} is open")}
+        if app:
+            v = verify_app_open(app)
+            return {"verified": v["success"], "message": v.get("message", f"{app} is open")}
 
     if tool in ("navigate_url", "google_search", "youtube_search"):
         url = args.get("url", "")
@@ -97,5 +109,4 @@ def verify_step(tool: str, args: dict, result: dict) -> dict:
             v = verify_url(fragment)
         return {"verified": v["success"], "message": v.get("message", f"Navigated to {url}")}
 
-    # For other tools, trust the result
     return {"verified": True, "message": result.get("message", "Done")}

@@ -1,16 +1,45 @@
 """
 agent/tools/document.py
-Document understanding tools: read PDFs, summarize content, answer questions.
+Document understanding tools: read PDFs, summarize content,
+compare two document instances, answer questions.
 """
 import logging
 import os
-import re
 from pathlib import Path
 
 log = logging.getLogger("intellivox.document")
 
 HOME = str(Path.home())
 MAX_CHARS = 12_000   # limit fed to LLM to avoid token overflow
+SAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "samples"
+DEFAULT_DUMMY_PATH = str(SAMPLES_DIR / "dummy_document.txt")
+
+# Baseline dummy content used when comparing against a PDF summary
+DUMMY_DOCUMENT_CONTENT = """\
+IntelliVox Sample Document (Dummy Instance)
+==========================================
+
+Title: Product Overview — Voice Desktop Assistant
+
+Purpose:
+This is a placeholder baseline document used for pairwise comparison
+against a PDF summary. It describes a generic voice-controlled desktop
+assistant that can open apps, search the web, and summarize files.
+
+Key points:
+• Voice input is transcribed locally with Whisper
+• An LLM planner turns speech into tool calls
+• Supported actions include browser, desktop, and file tools
+• Document tools can read PDFs and produce short summaries
+• Safety checks gate destructive actions before they run
+
+Scope (intentionally limited):
+This dummy instance does not include pricing, hiring timelines,
+hackathon rules, or any event-specific details. Those details are
+expected to appear only in the real PDF summary being compared.
+
+Last updated: 2026-07-24
+"""
 
 
 # ── PDF text extraction ────────────────────────────────────────────────────────
@@ -209,3 +238,164 @@ def answer_question(text: str, question: str) -> dict:
         return {"success": True, "answer": response["message"]["content"].strip()}
     except Exception as e:
         return {"success": False, "message": f"Q&A failed: {e}"}
+
+
+# ── Dummy instance + pairwise comparison ──────────────────────────────────────
+
+def create_dummy_file(path: str = "", content: str = "") -> dict:
+    """
+    Create (or overwrite) a dummy document used as one side of a comparison.
+    Defaults to voice/samples/dummy_document.txt with built-in baseline text.
+    Returns: { success, path, content, message }
+    """
+    target = path.strip() if path else DEFAULT_DUMMY_PATH
+    expanded = str(Path(target).expanduser().resolve())
+    body = content.strip() if content else DUMMY_DOCUMENT_CONTENT
+
+    try:
+        Path(expanded).parent.mkdir(parents=True, exist_ok=True)
+        with open(expanded, "w", encoding="utf-8") as f:
+            f.write(body)
+        log.info("Created dummy document at %s (%d chars)", expanded, len(body))
+        return {
+            "success": True,
+            "path": expanded,
+            "content": body,
+            "message": f"Dummy file created at {expanded}",
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Could not create dummy file: {e}"}
+
+
+def compare_documents(
+    text_a: str = "",
+    text_b: str = "",
+    label_a: str = "Instance A",
+    label_b: str = "Instance B",
+    style: str = "bullets",
+) -> dict:
+    """
+    Compare exactly two document instances and produce a comparison summary.
+    Typical use: text_a = PDF summary, text_b = dummy file content.
+    Returns: { success, summary, label_a, label_b }
+    """
+    a = (text_a or "").strip()
+    b = (text_b or "").strip()
+    if not a or not b:
+        return {
+            "success": False,
+            "message": "Need two non-empty text instances to compare",
+        }
+
+    # Keep both sides under the token budget (split evenly)
+    half = MAX_CHARS // 2
+    a, b = a[:half], b[:half]
+
+    style_prompts = {
+        "concise": (
+            "Write a concise comparison summary in 4-6 sentences. "
+            "Cover similarities, differences, and what is unique to each side."
+        ),
+        "detailed": (
+            "Write a detailed comparison summary covering: shared themes, "
+            "key differences, missing topics on each side, and an overall verdict."
+        ),
+        "bullets": (
+            "Compare the two instances as bullet points with sections:\n"
+            "• Similarities\n• Differences\n• Only in first instance\n"
+            "• Only in second instance\n• Overall summary (2-3 sentences)"
+        ),
+    }
+    instruction = style_prompts.get(style, style_prompts["bullets"])
+
+    prompt = (
+        f"{instruction}\n\n"
+        f"You are comparing exactly TWO instances at a time.\n"
+        f"Create the summary WHILE comparing them — do not summarize each alone.\n\n"
+        f"=== {label_a} ===\n{a}\n\n"
+        f"=== {label_b} ===\n{b}"
+    )
+
+    try:
+        import ollama
+        response = ollama.chat(
+            model="llama3.1",
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.3},
+        )
+        summary = response["message"]["content"].strip()
+        return {
+            "success": True,
+            "summary": summary,
+            "label_a": label_a,
+            "label_b": label_b,
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Comparison failed: {e}"}
+
+
+def compare_pdf_with_dummy(
+    pdf_path: str,
+    dummy_path: str = "",
+    style: str = "bullets",
+    save_pdf_summary: bool = True,
+) -> dict:
+    """
+    End-to-end pairwise compare:
+      1) Read PDF → summarize it (instance A, optionally saved to disk)
+      2) Ensure a dummy file exists (instance B)
+      3) Compare the two instances and return a comparison summary
+
+    Returns: {
+      success, summary, pdf_summary, pdf_summary_path,
+      dummy_path, pdf_path, label_a, label_b
+    }
+    """
+    pdf = read_pdf(pdf_path)
+    if not pdf.get("success"):
+        return pdf
+
+    pdf_sum = summarize(pdf["text"], style="detailed")
+    if not pdf_sum.get("success"):
+        return pdf_sum
+
+    pdf_summary_text = pdf_sum["summary"]
+    pdf_summary_path = ""
+
+    if save_pdf_summary:
+        stem = Path(pdf["path"]).stem
+        out_dir = Path(dummy_path).expanduser().resolve().parent if dummy_path else SAMPLES_DIR
+        out_dir.mkdir(parents=True, exist_ok=True)
+        pdf_summary_path = str(out_dir / f"{stem}_summary.txt")
+        try:
+            with open(pdf_summary_path, "w", encoding="utf-8") as f:
+                f.write(pdf_summary_text)
+        except Exception as e:
+            log.warning("Could not save PDF summary file: %s", e)
+            pdf_summary_path = ""
+
+    dummy = create_dummy_file(path=dummy_path or DEFAULT_DUMMY_PATH)
+    if not dummy.get("success"):
+        return dummy
+
+    comparison = compare_documents(
+        text_a=pdf_summary_text,
+        text_b=dummy["content"],
+        label_a="PDF Summary",
+        label_b="Dummy Document",
+        style=style,
+    )
+    if not comparison.get("success"):
+        return comparison
+
+    return {
+        "success": True,
+        "summary": comparison["summary"],
+        "pdf_summary": pdf_summary_text,
+        "pdf_summary_path": pdf_summary_path,
+        "dummy_path": dummy["path"],
+        "pdf_path": pdf["path"],
+        "label_a": "PDF Summary",
+        "label_b": "Dummy Document",
+        "message": "Compared PDF summary with dummy document",
+    }

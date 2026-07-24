@@ -4,10 +4,11 @@ File system tools: read, write, list, move, delete, find.
 """
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
-HOME = str(Path.home())
+from agent import platform as plat
+
+HOME = plat.HOME
 
 SAFE_BASE_DIRS = [
     os.path.join(HOME, "Desktop"),
@@ -19,32 +20,10 @@ SAFE_BASE_DIRS = [
 
 def find_file(name: str, directory: str = None) -> dict:
     """
-    Search for a file by name using macOS Spotlight (mdfind).
-    Much smarter than guessing paths — finds files anywhere on the Mac.
+    Search for a file by name (Spotlight on macOS, find/locate on Linux).
     Returns the best match path.
     """
-    # Use Spotlight for instant, full-disk search
-    search_dir = directory or HOME
-    result = subprocess.run(
-        ["mdfind", "-onlyin", search_dir, "-name", name],
-        capture_output=True, text=True
-    )
-    matches = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-
-    if not matches:
-        # Broaden search to full home directory
-        result2 = subprocess.run(
-            ["mdfind", "-onlyin", HOME, name],
-            capture_output=True, text=True
-        )
-        matches = [l.strip() for l in result2.stdout.strip().splitlines() if l.strip()]
-
-    if not matches:
-        return {"success": False, "message": f"No file found matching '{name}'", "matches": []}
-
-    # Prefer shorter, more direct paths
-    matches.sort(key=lambda p: (len(p.split("/")), p))
-    return {"success": True, "path": matches[0], "matches": matches[:5]}
+    return plat.find_file(name, directory)
 
 
 def _is_safe_path(path: str) -> bool:
@@ -123,11 +102,4 @@ def move_file(src: str, dst: str) -> dict:
 
 def open_file(path: str) -> dict:
     """Open a file with its default application."""
-    import subprocess
-    expanded = str(Path(path).expanduser())
-    if not os.path.exists(expanded):
-        return {"success": False, "message": f"File not found: {path}"}
-    result = subprocess.run(["open", expanded], capture_output=True, text=True)
-    if result.returncode == 0:
-        return {"success": True, "message": f"Opened {expanded}"}
-    return {"success": False, "message": result.stderr.strip()}
+    return plat.open_path(path)

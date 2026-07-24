@@ -1,0 +1,2 @@
+{"type": "transcript", "text": "Open notepad", "language": "en", "ts": "2026-07-24T16:45:56.561214+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the default text editor application.", "steps": [{"tool": "open_app", "args": {"name": "notepad"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T16:50:09.854201+00:00"}

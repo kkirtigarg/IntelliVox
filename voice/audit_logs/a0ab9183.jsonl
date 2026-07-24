@@ -1,0 +1,12 @@
+{"type": "transcript", "text": "\u0905\u092a\u0928 \u0928\u094b\u091f\u092a\u0947\u0921", "language": "hi", "ts": "2026-07-24T15:35:09.049242+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand '\u0905\u092a\u0928 \u0928\u094b\u091f\u092a\u0947\u0921'. Could you rephrase it?"}, "ts": "2026-07-24T15:35:33.587607+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand '\u0905\u092a\u0928 \u0928\u094b\u091f\u092a\u0947\u0921'. Could you rephrase it?", "ts": "2026-07-24T15:35:33.587990+00:00"}
+{"type": "transcript", "text": "Open notepad", "language": "en", "ts": "2026-07-24T15:36:07.730464+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the default text editor on macOS.", "steps": [{"tool": "open_app", "args": {"name": "TextEdit"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:36:51.934743+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T15:36:51.934979+00:00"}
+{"type": "transcript", "text": "\u0905\u092a\u0928\u0947 \u0928\u094b\u091f \u092a\u0948\u091f\u0964", "language": "hi", "ts": "2026-07-24T16:04:04.267803+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand '\u0905\u092a\u0928\u0947 \u0928\u094b\u091f \u092a\u0948\u091f\u0964'. Could you rephrase it?"}, "ts": "2026-07-24T16:04:43.826700+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand '\u0905\u092a\u0928\u0947 \u0928\u094b\u091f \u092a\u0948\u091f\u0964'. Could you rephrase it?", "ts": "2026-07-24T16:04:43.827043+00:00"}
+{"type": "transcript", "text": "Open notepad", "language": "en", "ts": "2026-07-24T16:19:15.998447+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the default text editor on this Mac.", "steps": [{"tool": "open_app", "args": {"name": "TextEdit"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T16:19:59.999661+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T16:19:59.999858+00:00"}

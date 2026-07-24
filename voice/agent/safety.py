@@ -25,6 +25,7 @@ SAFE_TOOLS = {
     "open_app", "take_screenshot", "list_files", "read_file",
     "press_key", "set_volume", "open_file", "find_file",
     "read_pdf", "summarize", "summarize_codebase", "answer_question",
+    "create_dummy_file", "compare_documents", "compare_pdf_with_dummy",
 }
 
 # Tools that need explicit user confirmation before running
