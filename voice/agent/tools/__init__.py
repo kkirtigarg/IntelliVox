@@ -4,9 +4,8 @@ Tool registry — maps tool names to callables.
 """
 import os
 from pathlib import Path
-from .browser import open_browser, navigate_url, google_search, youtube_search, youtube_play
-from .desktop import open_app, close_app, type_text, press_key, click, take_screenshot, set_volume
-from .files   import list_files, read_file, write_file, delete_file, move_file, open_file, find_file, find_compare_pdf_pair
+from .files   import list_files, read_file, write_file, edit_file, delete_file, move_file, open_file, find_file, find_compare_pdf_pair
+from .spreadsheet import read_spreadsheet, update_spreadsheet
 from .document import read_pdf, summarize, answer_question, summarize_codebase, save_summary_file, compare_summarize
 from .mail import search_mail, read_mail
 from .gmail import open_gmail, read_gmail
@@ -32,14 +31,19 @@ TOOLS = {
     "set_volume":      set_volume,
 
     # Files
-    "find_file":       find_file,
+    "find_file":           find_file,
     "find_compare_pdf_pair": find_compare_pdf_pair,
-    "list_files":      list_files,
-    "read_file":       read_file,
-    "write_file":      write_file,
-    "delete_file":     delete_file,
-    "move_file":       move_file,
-    "open_file":       open_file,
+    "list_files":          list_files,
+    "read_file":           read_file,
+    "write_file":          write_file,
+    "edit_file":           edit_file,
+    "delete_file":         delete_file,
+    "move_file":           move_file,
+    "open_file":           open_file,
+
+    # Spreadsheets
+    "read_spreadsheet":    read_spreadsheet,
+    "update_spreadsheet":  update_spreadsheet,
 
     # Documents & AI
     "read_pdf":        read_pdf,

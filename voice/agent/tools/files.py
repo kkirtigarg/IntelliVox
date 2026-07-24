@@ -504,15 +504,39 @@ def read_file(path: str) -> dict:
 
 
 def write_file(path: str, content: str) -> dict:
-    """Write text content to a file. REQUIRES user confirmation (handled by safety layer)."""
+    """
+    Write text content to a file. Auto-detects format from extension.
+    Supports: .txt / .md / .csv and any plain text — .docx (real Word document).
+    """
     expanded = str(Path(path).expanduser())
     if not _is_safe_path(expanded):
         return {"success": False, "message": "Access denied: outside allowed directories"}
+
+    ext = Path(expanded).suffix.lower()
+    Path(expanded).parent.mkdir(parents=True, exist_ok=True)
+
+    if ext == ".docx":
+        return _write_docx(expanded, content)
+    else:
+        try:
+            with open(expanded, "w", encoding="utf-8") as f:
+                f.write(content)
+            return {"success": True, "message": f"Written to {expanded}", "path": expanded}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+
+def _write_docx(path: str, content: str) -> dict:
     try:
-        Path(expanded).parent.mkdir(parents=True, exist_ok=True)
-        with open(expanded, "w", encoding="utf-8") as f:
-            f.write(content)
-        return {"success": True, "message": f"Written to {expanded}"}
+        from docx import Document
+    except ImportError:
+        return {"success": False, "message": "python-docx not installed. Run: pip install python-docx"}
+    try:
+        doc = Document()
+        for line in content.splitlines():
+            doc.add_paragraph(line)
+        doc.save(path)
+        return {"success": True, "message": f"Written to {path}", "path": path}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
@@ -543,6 +567,100 @@ def move_file(src: str, dst: str) -> dict:
     try:
         shutil.move(src_exp, dst_exp)
         return {"success": True, "message": f"Moved {src} → {dst}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def edit_file(path: str, old_text: str, new_text: str) -> dict:
+    """
+    Replace old_text with new_text in any file type (in-place, never overwrites the whole file).
+    Supports: .txt, .md, .csv and plain text files — .docx (Word) — .xlsx/.xls (Excel).
+    """
+    expanded = str(Path(path).expanduser())
+    if not os.path.exists(expanded):
+        return {"success": False, "message": f"File not found: {path}"}
+    if not _is_safe_path(expanded):
+        return {"success": False, "message": "Access denied: outside allowed directories"}
+
+    ext = Path(expanded).suffix.lower()
+
+    if ext in (".docx",):
+        return _edit_docx(expanded, old_text, new_text)
+    elif ext in (".xlsx", ".xls", ".xlsm"):
+        return _edit_excel(expanded, old_text, new_text)
+    else:
+        return _edit_plaintext(expanded, old_text, new_text)
+
+
+def _edit_plaintext(path: str, old_text: str, new_text: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        if old_text not in content:
+            return {"success": False, "message": f"Text not found in file: {old_text!r}"}
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content.replace(old_text, new_text, 1))
+        return {"success": True, "message": f"Replaced text in {path}", "path": path}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def _edit_docx(path: str, old_text: str, new_text: str) -> dict:
+    try:
+        from docx import Document
+    except ImportError:
+        return {"success": False, "message": "python-docx not installed. Run: pip install python-docx"}
+    try:
+        doc = Document(path)
+        replaced = 0
+
+        def _replace_in_para(para):
+            """Replace text in a paragraph, handling text split across multiple runs."""
+            nonlocal replaced
+            if old_text not in para.text:
+                return
+            # Merge all run text, replace, then put it back into the first run
+            full = para.text
+            new_full = full.replace(old_text, new_text, 1)
+            for i, run in enumerate(para.runs):
+                run.text = new_full if i == 0 else ""
+            replaced += 1
+
+        for para in doc.paragraphs:
+            _replace_in_para(para)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        _replace_in_para(para)
+
+        if replaced == 0:
+            return {"success": False, "message": f"Text not found in document: {old_text!r}"}
+        doc.save(path)
+        return {"success": True, "message": f"Replaced text in {path}", "path": path}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def _edit_excel(path: str, old_text: str, new_text: str) -> dict:
+    try:
+        import openpyxl
+    except ImportError:
+        return {"success": False, "message": "openpyxl not installed. Run: pip install openpyxl"}
+    try:
+        wb = openpyxl.load_workbook(path)
+        replaced = 0
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value is not None and old_text in str(cell.value):
+                        cell.value = str(cell.value).replace(old_text, new_text, 1)
+                        replaced += 1
+        if replaced == 0:
+            return {"success": False, "message": f"Text not found in spreadsheet: {old_text!r}"}
+        wb.save(path)
+        wb.close()
+        return {"success": True, "message": f"Replaced text in {replaced} cell(s) in {path}", "path": path}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
