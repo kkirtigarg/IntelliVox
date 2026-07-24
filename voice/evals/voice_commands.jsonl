@@ -2,8 +2,8 @@
 {"input": "open google chrome", "expected_tools": ["open_browser"], "must_succeed": true}
 {"input": "set volume to 50", "expected_tools": ["set_volume"], "must_succeed": true}
 {"input": "go through IntelliVox folder and summarize the code", "expected_tools": ["find_file", "summarize_codebase"], "must_succeed": false}
-{"input": "search YouTube for a song and play it", "expected_tools": ["computer_use"], "must_succeed": false}
-{"input": "go to first link and play the song", "expected_tools": ["computer_use"], "must_succeed": false}
+{"input": "search YouTube for a song and play it", "expected_tools": ["youtube_play"], "must_succeed": false}
+{"input": "play lofi on youtube", "expected_tools": ["youtube_play"], "must_succeed": false}
 {"input": "open finder and open the talent hack pdf", "expected_tools": ["open_app", "find_file", "open_file"], "must_succeed": false}
 {"input": "summarize the talent hack pdf", "expected_tools": ["find_file", "read_pdf", "summarize"], "must_succeed": false}
 {"input": "list files on my desktop", "expected_tools": ["list_files"], "must_succeed": true}

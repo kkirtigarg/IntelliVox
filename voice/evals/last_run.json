@@ -1,0 +1,136 @@
+{
+  "passed": 10,
+  "failed": 0,
+  "rate": 100.0,
+  "results": [
+    {
+      "input": "open finder",
+      "status": "PASS",
+      "expected_tools": [
+        "open_app"
+      ],
+      "actual_tools": [
+        "open_app"
+      ],
+      "latency_ms": 4121.3,
+      "intent": "open_app"
+    },
+    {
+      "input": "open google chrome",
+      "status": "PASS",
+      "expected_tools": [
+        "open_browser"
+      ],
+      "actual_tools": [
+        "open_browser"
+      ],
+      "latency_ms": 4031.1,
+      "intent": "open browser"
+    },
+    {
+      "input": "set volume to 50",
+      "status": "PASS",
+      "expected_tools": [
+        "set_volume"
+      ],
+      "actual_tools": [
+        "set_volume"
+      ],
+      "latency_ms": 3864.0,
+      "intent": "Set Volume"
+    },
+    {
+      "input": "go through IntelliVox folder and summarize the code",
+      "status": "PASS",
+      "expected_tools": [
+        "find_file",
+        "summarize_codebase"
+      ],
+      "actual_tools": [
+        "find_file",
+        "summarize_codebase"
+      ],
+      "latency_ms": 0.3,
+      "intent": "summarize_codebase"
+    },
+    {
+      "input": "search YouTube for a song and play it",
+      "status": "PASS",
+      "expected_tools": [
+        "youtube_play"
+      ],
+      "actual_tools": [
+        "youtube_play"
+      ],
+      "latency_ms": 1.3,
+      "intent": "youtube_play"
+    },
+    {
+      "input": "play lofi on youtube",
+      "status": "PASS",
+      "expected_tools": [
+        "youtube_play"
+      ],
+      "actual_tools": [
+        "youtube_play"
+      ],
+      "latency_ms": 0.9,
+      "intent": "youtube_play"
+    },
+    {
+      "input": "open finder and open the talent hack pdf",
+      "status": "PASS",
+      "expected_tools": [
+        "open_app",
+        "find_file",
+        "open_file"
+      ],
+      "actual_tools": [
+        "open_app",
+        "find_file",
+        "open_file"
+      ],
+      "latency_ms": 6705.1,
+      "intent": "Open Finder and PDF"
+    },
+    {
+      "input": "summarize the talent hack pdf",
+      "status": "PASS",
+      "expected_tools": [
+        "find_file",
+        "read_pdf",
+        "summarize"
+      ],
+      "actual_tools": [
+        "find_file",
+        "read_pdf",
+        "summarize"
+      ],
+      "latency_ms": 7627.9,
+      "intent": "Summarize PDF"
+    },
+    {
+      "input": "list files on my desktop",
+      "status": "PASS",
+      "expected_tools": [
+        "list_files"
+      ],
+      "actual_tools": [
+        "list_files"
+      ],
+      "latency_ms": 4364.1,
+      "intent": "list_files"
+    },
+    {
+      "input": "what is the weather today",
+      "status": "PASS",
+      "expected_tools": [],
+      "actual_tools": [
+        "open_browser",
+        "google_search"
+      ],
+      "latency_ms": 5469.9,
+      "intent": "weather"
+    }
+  ]
+}

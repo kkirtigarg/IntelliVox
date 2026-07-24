@@ -4,19 +4,23 @@
 #   • Python 3.11+ (3.13 tested)
 #   • ffmpeg          — brew install ffmpeg  /  apt install ffmpeg
 #   • Ollama          — https://ollama.com  +  ollama pull llama3.1
-#   • Vision (computer_use): ollama pull llava:7b   ← recommended if llama3.2-vision fails
-#     export INTELLIVOX_VISION_MODEL=llava:7b
-#     Alternative: ollama pull llama3.2-vision  (needs Ollama with mllama support)
+#   • Google Chrome   — signed-in profile for Gmail / YouTube tools
+#   • Chrome → View → Developer → Allow JavaScript from Apple Events (Gmail read)
+#
+# Optional:
+#   • playwright install chromium   — for web_browse tool
+#   • ollama pull llava:7b          — computer_use vision (INTELLIVOX_VISION_MODEL=llava:7b)
 #
 # Setup:
 #   cd voice
 #   python3 -m venv .venv
 #   source .venv/bin/activate      # Windows: .venv\Scripts\activate
 #   pip install -r requirements.txt
-#   python -m agent.orchestrator   # starts server on ws://127.0.0.1:8765/ws
+#   cp .env.example .env
+#   python -m agent.orchestrator     # ws://127.0.0.1:8765/ws
 #
 # macOS permissions (System Settings → Privacy & Security):
-#   • Microphone, Screen Recording, Accessibility, Automation
+#   • Microphone, Accessibility, Automation (as prompted)
 
 # ── Browser / YouTube ─────────────────────────────────────────────────────────
 yt-dlp>=2024.1.0
@@ -35,7 +39,7 @@ starlette==0.51.0
 faster-whisper==1.2.1
 numpy==2.4.6
 
-# ── LLM planner / summarizer (talks to local Ollama) ──────────────────────────
+# ── LLM planner / summarizer (local Ollama) ───────────────────────────────────
 ollama==0.6.2
 httpx==0.28.1
 
@@ -48,14 +52,14 @@ pyobjc==12.2.1; sys_platform == "darwin"
 pdfplumber==0.11.10
 pypdf==6.14.2
 
-# ── Text-to-speech (local, offline) ─────────────────────────────────────────
+# ── Text-to-speech (local, offline) ───────────────────────────────────────────
 pyttsx3==2.99
 
 # ── Screenshots / image handling ──────────────────────────────────────────────
 pillow==12.3.0
 
-# ── Optional: live mic test script (voice/test_whisper.py) ───────────────────
+# ── Optional: live mic test (voice/test_whisper.py) ───────────────────────────
 sounddevice==0.5.5
 
-# ── Observability (Comet Opik — optional, set OPIK_DISABLED=true to skip) ───
+# ── Observability (Comet Opik — optional, OPIK_DISABLED=true by default) ────
 opik>=1.0.0
