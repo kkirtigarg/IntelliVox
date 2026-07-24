@@ -1,0 +1,27 @@
+{
+  "id": "5f104725",
+  "original_transcript": "open firefox and then open google.com",
+  "state": "COMPLETED",
+  "current_step_index": 2,
+  "steps": [
+    {
+      "id": "ea5de187",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "ad56a829",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784889304.461753,
+  "updated_at": 1784889311.548584
+}

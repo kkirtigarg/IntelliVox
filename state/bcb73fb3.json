@@ -1,0 +1,26 @@
+{
+  "id": "bcb73fb3",
+  "original_transcript": "open firefox and then open google on it",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "438dce0b",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "failed"
+    },
+    {
+      "id": "ac172007",
+      "category": "open_app",
+      "args": {
+        "app": "google"
+      },
+      "status": "pending"
+    }
+  ],
+  "created_at": 1784881901.4687998,
+  "updated_at": 1784881902.6704516
+}

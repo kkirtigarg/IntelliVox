@@ -1,0 +1,19 @@
+{
+  "id": "1d59626f",
+  "original_transcript": "I suspect you haven't been there",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "d1ea54b9",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=vscode",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784884972.001027,
+  "updated_at": 1784885035.161182
+}

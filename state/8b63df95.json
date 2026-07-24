@@ -1,0 +1,19 @@
+{
+  "id": "8b63df95",
+  "original_transcript": "Add Hello World in this",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "a4f326d2",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784898211.0855353,
+  "updated_at": 1784898257.898562
+}

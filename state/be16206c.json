@@ -1,0 +1,27 @@
+{
+  "id": "be16206c",
+  "original_transcript": "open firefox and open google.com",
+  "state": "COMPLETED",
+  "current_step_index": 2,
+  "steps": [
+    {
+      "id": "a68df147",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "87ee1d82",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784882041.9270105,
+  "updated_at": 1784882043.4551804
+}

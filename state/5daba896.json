@@ -1,0 +1,19 @@
+{
+  "id": "5daba896",
+  "original_transcript": "go through the first hyperlink on the google",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "59ba0c52",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=pag",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784899084.5878975,
+  "updated_at": 1784899131.933459
+}

@@ -1,0 +1,27 @@
+{
+  "id": "abd2c216",
+  "original_transcript": "That's what I'm going to talk about.",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "07ce8975",
+      "category": "open_app",
+      "args": {
+        "name": "Google Chrome",
+        "type": "web_browser"
+      },
+      "status": "failed"
+    },
+    {
+      "id": "4c4ab7fc",
+      "category": "focus_window",
+      "args": {
+        "window_id": "current_window_id"
+      },
+      "status": "pending"
+    }
+  ],
+  "created_at": 1784884121.9820344,
+  "updated_at": 1784884138.7051313
+}

@@ -1,0 +1,19 @@
+{
+  "id": "a755b1f5",
+  "original_transcript": "open youtube",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "d846327e",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://firefox.py",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784884938.200096,
+  "updated_at": 1784884963.402478
+}

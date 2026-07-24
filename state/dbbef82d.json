@@ -1,0 +1,24 @@
+{
+  "id": "dbbef82d",
+  "original_transcript": "seach for google.com",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "ac7b0f11",
+      "category": "open_app",
+      "args": {
+        "url": "https://www.google.com"
+      },
+      "status": "failed"
+    },
+    {
+      "id": "5e4ec238",
+      "category": "focus_window",
+      "args": {},
+      "status": "pending"
+    }
+  ],
+  "created_at": 1784881566.7244718,
+  "updated_at": 1784881578.9020789
+}

@@ -1,0 +1,27 @@
+{
+  "id": "8ac019ff",
+  "original_transcript": "write google.com",
+  "state": "FAILED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "1e4c854f",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "4f9874db",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://google.con",
+        "browser": "firefox"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784882560.265078,
+  "updated_at": 1784882579.192662
+}

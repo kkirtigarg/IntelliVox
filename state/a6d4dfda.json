@@ -1,0 +1,16 @@
+{
+  "id": "a6d4dfda",
+  "original_transcript": "screenshot",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "f0031c95",
+      "category": "screenshot",
+      "args": {},
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784883431.4710217,
+  "updated_at": 1784883431.4719558
+}

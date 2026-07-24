@@ -1,0 +1,18 @@
+{
+  "id": "63896cf6",
+  "original_transcript": "resume",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "fce89a7d",
+      "category": "open_app",
+      "args": {
+        "app": "notepad"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784883450.0477629,
+  "updated_at": 1784883456.2052214
+}

@@ -1,0 +1,147 @@
+# Deterministic policy rules.
+#
+# Every action category the agent might ever propose MUST be listed here.
+# Anything not listed is denied by default (fail closed) -- see
+# policy_engine.py DEFAULT_DECISION.
+#
+# risk: SAFE | LOW | MEDIUM | HIGH | CRITICAL
+# allow: true | false   -- if false, this action can NEVER be performed,
+#                          confirmation cannot override it.
+# confirm: true | false -- if true and allow is true, user confirmation is
+#                          required every time before execution.
+# show: what must be presented to the user verbatim in the confirmation
+#       prompt (list of arg names), for transparency.
+
+rules:
+  # ---- read-only / observational: no side effects ----
+  screenshot:
+    risk: SAFE
+    allow: true
+    confirm: false
+  read_window_titles:
+    risk: SAFE
+    allow: true
+    confirm: false
+  read_screen_text:
+    risk: SAFE
+    allow: true
+    confirm: false
+  read_page_text:
+    risk: SAFE
+    allow: true
+    confirm: false
+  file_read:
+    risk: LOW
+    allow: true
+    confirm: false
+
+  # ---- low-risk state changes ----
+  open_app:
+    risk: LOW
+    allow: true
+    confirm: false
+    requires_allowlist: true
+  focus_window:
+    risk: SAFE
+    allow: true
+    confirm: false
+  open_file:
+    risk: LOW
+    allow: true
+    confirm: false
+  gui_click:
+    risk: LOW
+    allow: true
+    confirm: false
+  gui_type:
+    risk: LOW
+    allow: true
+    confirm: false
+  browser_navigate:
+    risk: MEDIUM
+    allow: true
+    confirm: false
+    requires_allowlist: true
+  # Follow-up after a remembered Google search — destination host varies.
+  open_search_result:
+    risk: MEDIUM
+    allow: true
+    confirm: false
+
+  # ---- medium risk: reversible-ish but worth caution ----
+  file_write_new:
+    risk: LOW
+    allow: true
+    confirm: false
+  file_write_overwrite:
+    risk: MEDIUM
+    allow: true
+    confirm: true
+    show: [path]
+  click_page_element:
+    risk: MEDIUM
+    allow: true
+    confirm: false
+
+  # ---- high risk: consequential / hard to undo / external-facing ----
+  file_delete:
+    risk: HIGH
+    allow: true
+    confirm: true
+    show: [path]
+    rate_limited: true
+  send_message:
+    risk: HIGH
+    allow: true
+    confirm: true
+    show: [to, subject, body]
+  form_submit:
+    risk: HIGH
+    allow: true
+    confirm: true
+    show: [url, fields]
+  install_software:
+    risk: HIGH
+    allow: true
+    confirm: true
+    show: [package]
+
+  # ---- environment control (participant eval desktop) ----
+  reset_environment:
+    risk: MEDIUM
+    allow: true
+    confirm: false
+
+    risk: CRITICAL
+    allow: true
+    confirm: true
+    show: [item, amount, destination]
+  transfer_funds:
+    risk: CRITICAL
+    allow: true
+    confirm: true
+    show: [amount, destination_account]
+  system_setting_change:
+    risk: CRITICAL
+    allow: true
+    confirm: true
+    show: [setting, new_value]
+  shutdown_or_restart:
+    risk: CRITICAL
+    allow: true
+    confirm: true
+    show: []
+
+  # ---- always denied, no confirmation possible ----
+  disable_security_software:
+    risk: CRITICAL
+    allow: false
+    confirm: false
+  modify_audit_log:
+    risk: CRITICAL
+    allow: false
+    confirm: false
+  bulk_delete_recursive:
+    risk: CRITICAL
+    allow: false
+    confirm: false

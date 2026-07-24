@@ -1,0 +1,18 @@
+{
+  "id": "80e9bda6",
+  "original_transcript": "opemn download",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "f80258da",
+      "category": "open_app",
+      "args": {
+        "name": "Google Chrome"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881470.3403943,
+  "updated_at": 1784881476.013936
+}

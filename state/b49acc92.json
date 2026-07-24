@@ -1,0 +1,18 @@
+{
+  "id": "b49acc92",
+  "original_transcript": "open firefox and google.com",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "49d627e2",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784882003.5683131,
+  "updated_at": 1784882003.5976603
+}

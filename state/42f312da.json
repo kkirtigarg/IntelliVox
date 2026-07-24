@@ -1,0 +1,19 @@
+{
+  "id": "42f312da",
+  "original_transcript": "open google",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "726dc423",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784893240.3585851,
+  "updated_at": 1784893243.4687119
+}

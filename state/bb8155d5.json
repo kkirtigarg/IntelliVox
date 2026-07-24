@@ -1,0 +1,9 @@
+{
+  "id": "bb8155d5",
+  "original_transcript": "open any pdf file available on the download folder",
+  "state": "WAITING_CLARIFICATION",
+  "current_step_index": 0,
+  "steps": [],
+  "created_at": 1784899406.2754228,
+  "updated_at": 1784899406.2763019
+}

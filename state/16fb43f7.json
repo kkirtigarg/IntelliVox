@@ -1,0 +1,27 @@
+{
+  "id": "16fb43f7",
+  "original_transcript": "open firefox then open google search, search for best football team in the world",
+  "state": "COMPLETED",
+  "current_step_index": 2,
+  "steps": [
+    {
+      "id": "60570472",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "ad71a88b",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=search%2C+search+for+best+football+team+in+the+world",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784893204.3302786,
+  "updated_at": 1784893208.2699587
+}

@@ -1,0 +1,16 @@
+{
+  "id": "51405963",
+  "original_transcript": "list windows",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "24b3bba2",
+      "category": "read_window_titles",
+      "args": {},
+      "status": "done"
+    }
+  ],
+  "created_at": 1784883421.8870494,
+  "updated_at": 1784883421.894888
+}

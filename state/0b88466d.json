@@ -1,0 +1,18 @@
+{
+  "id": "0b88466d",
+  "original_transcript": "open notepad",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "243b953a",
+      "category": "open_app",
+      "args": {
+        "app": "notepad"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784880978.419486,
+  "updated_at": 1784880979.6221805
+}

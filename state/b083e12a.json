@@ -1,0 +1,18 @@
+{
+  "id": "b083e12a",
+  "original_transcript": "open firefox",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "b86ddb17",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784881791.20463,
+  "updated_at": 1784881791.2611074
+}

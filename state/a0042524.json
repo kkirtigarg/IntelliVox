@@ -1,0 +1,27 @@
+{
+  "id": "a0042524",
+  "original_transcript": "open with tag, and tag with quantus",
+  "state": "COMPLETED",
+  "current_step_index": 2,
+  "steps": [
+    {
+      "id": "9ac71741",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "1680fc24",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784889994.2258084,
+  "updated_at": 1784890014.7018118
+}

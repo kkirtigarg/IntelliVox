@@ -1,0 +1,18 @@
+{
+  "id": "05267d78",
+  "original_transcript": "open Downloads",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "1f88836d",
+      "category": "open_app",
+      "args": {
+        "name": "Downloads"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881494.860141,
+  "updated_at": 1784881502.8771017
+}

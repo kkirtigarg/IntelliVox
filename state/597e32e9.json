@@ -1,0 +1,35 @@
+{
+  "id": "597e32e9",
+  "original_transcript": "write Hello World",
+  "state": "COMPLETED",
+  "current_step_index": 3,
+  "steps": [
+    {
+      "id": "062512ab",
+      "category": "open_app",
+      "args": {
+        "app": "notepad"
+      },
+      "status": "done"
+    },
+    {
+      "id": "cd8933be",
+      "category": "file_write_new",
+      "args": {
+        "path": "/home/rahul/Downloads/voice_agent_project/workspace/notes.txt",
+        "content": ""
+      },
+      "status": "done"
+    },
+    {
+      "id": "960dbfc4",
+      "category": "open_file",
+      "args": {
+        "path": "/home/rahul/Downloads/voice_agent_project/workspace/notes.txt"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784882734.3396049,
+  "updated_at": 1784882763.726336
+}

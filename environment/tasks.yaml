@@ -1,0 +1,38 @@
+tasks:
+- id: task_open_invoice
+  title: Open the invoice PDF
+  instruction: Open the PDF viewer and open Documents/invoice.pdf
+  success_hints:
+  - invoice.pdf is open
+  - PDF viewer focused
+  starting_files:
+  - Documents/invoice.pdf
+- id: task_budget_total
+  title: Fill budget total
+  instruction: Open the spreadsheet Documents/budget.csv and put the sum of Amount
+    values into the Total row
+  success_hints:
+  - budget.csv Total cell is 2540
+  starting_files:
+  - Documents/budget.csv
+- id: task_notes_followup
+  title: Edit meeting notes
+  instruction: Open meeting_notes.txt in the text editor and add a line 'Called vendor
+    about invoice'
+  success_hints:
+  - meeting_notes.txt contains Called vendor
+  starting_files:
+  - Documents/meeting_notes.txt
+- id: task_browser_vendor
+  title: Look up vendor in browser
+  instruction: Open firefox and go to https://www.google.com
+  success_hints:
+  - firefox open
+  - google.com loaded
+  starting_files: []
+- id: task_create_app_py
+  title: Create app.py in editor
+  instruction: Open vscode and create a file with name app.py
+  success_hints:
+  - app.py exists in workspace
+  starting_files: []

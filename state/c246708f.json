@@ -1,0 +1,19 @@
+{
+  "id": "c246708f",
+  "original_transcript": "open firefox, open google.com commit",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "e23a8f94",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://google.com",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784889282.2660189,
+  "updated_at": 1784889283.779463
+}

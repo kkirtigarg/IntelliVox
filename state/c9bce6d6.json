@@ -1,0 +1,18 @@
+{
+  "id": "c9bce6d6",
+  "original_transcript": "Plosening or panopictus not to reopen",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "8bc504ce",
+      "category": "open_app",
+      "args": {
+        "app": "vscode"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784885862.4720912,
+  "updated_at": 1784885910.502721
+}

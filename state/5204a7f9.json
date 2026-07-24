@@ -1,0 +1,19 @@
+{
+  "id": "5204a7f9",
+  "original_transcript": "go through any link on the google page which was already open",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "e5a24745",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=page+which+was+already+open",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784899151.4135287,
+  "updated_at": 1784899154.9107864
+}

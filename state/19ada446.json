@@ -1,0 +1,18 @@
+{
+  "id": "19ada446",
+  "original_transcript": "open calculator",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "eb848b2a",
+      "category": "open_app",
+      "args": {
+        "app": "calculator"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881483.6320837,
+  "updated_at": 1784881484.8354247
+}

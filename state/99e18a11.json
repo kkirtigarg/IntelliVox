@@ -1,0 +1,27 @@
+{
+  "id": "99e18a11",
+  "original_transcript": "Hello. Hello.",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "ac835b40",
+      "category": "open_app",
+      "args": {
+        "name": "Google Chrome",
+        "type": "web_browser"
+      },
+      "status": "failed"
+    },
+    {
+      "id": "259873b9",
+      "category": "focus_window",
+      "args": {
+        "window_id": "current_window_id"
+      },
+      "status": "pending"
+    }
+  ],
+  "created_at": 1784884055.2439938,
+  "updated_at": 1784884059.6082785
+}

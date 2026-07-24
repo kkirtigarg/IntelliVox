@@ -1,0 +1,18 @@
+{
+  "id": "6e84fb88",
+  "original_transcript": "open google in it",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "42911269",
+      "category": "open_app",
+      "args": {
+        "action": "google.com"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881876.204949,
+  "updated_at": 1784881887.936303
+}

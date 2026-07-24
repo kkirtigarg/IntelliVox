@@ -1,0 +1,18 @@
+{
+  "id": "1360d55f",
+  "original_transcript": "open firefox and search for google",
+  "state": "FAILED",
+  "current_step_index": 0,
+  "steps": [
+    {
+      "id": "433cb09d",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881035.0363832,
+  "updated_at": 1784881036.238416
+}

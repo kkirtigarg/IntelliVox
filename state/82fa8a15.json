@@ -1,0 +1,18 @@
+{
+  "id": "82fa8a15",
+  "original_transcript": "open notepad and write Hello World in the file",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "2067c4b0",
+      "category": "open_app",
+      "args": {
+        "app": "notepad"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784882695.1992023,
+  "updated_at": 1784882715.6468997
+}

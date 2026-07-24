@@ -1,0 +1,18 @@
+{
+  "id": "2900bdc0",
+  "original_transcript": "open notepad",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "9c146d53",
+      "category": "open_app",
+      "args": {
+        "app": "notepad"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784877199.212838,
+  "updated_at": 1784877199.2134566
+}

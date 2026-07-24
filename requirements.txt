@@ -1,0 +1,29 @@
+# Core — enough for demo + tests (no desktop GUI required)
+pyyaml>=6.0
+pytest>=7.4.0
+
+# Optional local LLM planner (no cloud key) — install Ollama separately:
+#   https://ollama.com  then: ollama pull llama3.2:1b
+# No pip package required; uses urllib against http://127.0.0.1:11434
+
+# Optional cloud planner (ONLY if you later want Anthropic)
+anthropic>=0.34.0
+
+# --- Real voice pipeline (mic/speakers on Windows or Linux) ---
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.24
+pyttsx3>=2.90
+
+# --- Real desktop GUI actuator (cross-platform) ---
+pyautogui>=0.9.54
+Pillow>=10.0.0
+pytesseract>=0.3.10
+python-xlib>=0.33; sys_platform == "linux"
+
+# Windows-only window management (ignored on Linux)
+pygetwindow>=0.0.9; sys_platform == "win32"
+pywinauto>=0.6.8; sys_platform == "win32"
+
+# --- Optional browser actuator (DOM-accurate; use --with-browser) ---
+playwright>=1.44.0

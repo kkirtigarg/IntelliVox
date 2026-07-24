@@ -1,0 +1,26 @@
+{
+  "id": "0d9e3aab",
+  "original_transcript": "open firefox and then open google in it",
+  "state": "FAILED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "4161324a",
+      "category": "open_app",
+      "args": {
+        "app": "firefox"
+      },
+      "status": "done"
+    },
+    {
+      "id": "4a2cbb2e",
+      "category": "open_app",
+      "args": {
+        "app": "google"
+      },
+      "status": "failed"
+    }
+  ],
+  "created_at": 1784881937.4050336,
+  "updated_at": 1784881937.4337232
+}

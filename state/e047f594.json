@@ -1,0 +1,9 @@
+{
+  "id": "e047f594",
+  "original_transcript": "Now open the first link on the google",
+  "state": "WAITING_CLARIFICATION",
+  "current_step_index": 0,
+  "steps": [],
+  "created_at": 1784892696.6176276,
+  "updated_at": 1784892696.6212065
+}

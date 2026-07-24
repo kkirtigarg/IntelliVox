@@ -1,0 +1,19 @@
+{
+  "id": "5357de51",
+  "original_transcript": "search for best football team in the world",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "e8a9827e",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=best+football+team+in+the+world",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784893293.0515654,
+  "updated_at": 1784893296.950267
+}

@@ -1,0 +1,19 @@
+{
+  "id": "f422805e",
+  "original_transcript": "search for best team in the world",
+  "state": "COMPLETED",
+  "current_step_index": 1,
+  "steps": [
+    {
+      "id": "b025dea8",
+      "category": "browser_navigate",
+      "args": {
+        "url": "https://www.google.com/search?q=best+team+in+the+world",
+        "browser": "firefox"
+      },
+      "status": "done"
+    }
+  ],
+  "created_at": 1784898268.501685,
+  "updated_at": 1784898271.8910158
+}
