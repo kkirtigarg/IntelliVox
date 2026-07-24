@@ -105,7 +105,7 @@ def webm_to_pcm(data: bytes) -> np.ndarray:
 
 
 def transcribe(audio: np.ndarray) -> dict:
-    segments, info = whisper_model.transcribe(audio, beam_size=5)
+    segments, info = whisper_model.transcribe(audio, beam_size=5, language="en")
     text = " ".join(s.text.strip() for s in segments).strip()
     return {"text": text, "language": info.language, "confidence": round(info.language_probability, 2)}
 
