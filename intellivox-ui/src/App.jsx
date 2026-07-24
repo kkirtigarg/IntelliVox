@@ -10,12 +10,13 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8765/ws';
 /* ── useAgentVoice hook ── */
 function useAgentVoice() {
   const [phase, setPhase]         = useState('idle');
-  // idle|listening|transcribing|planning|executing|confirm|done|error|clarify
+  // idle|listening|transcribing|planning|executing|confirm|disambiguate|done|error|clarify
   const [transcript, setTranscript] = useState('');
   const [language, setLanguage]   = useState('');
   const [statusText, setStatusText] = useState('');
   const [steps, setSteps]         = useState([]);
   const [confirmData, setConfirmData] = useState(null);
+  const [disambiguateData, setDisambiguateData] = useState(null); // { text, options }
   const [richResult, setRichResult] = useState(null); // { label, text }
   const [history, setHistory]     = useState([]);
   const [errorMsg, setErrorMsg]   = useState('');
@@ -81,6 +82,11 @@ function useAgentVoice() {
         setConfirmData({ text: msg.text, tool: msg.tool, step_index: msg.step_index });
         break;
 
+      case 'disambiguate':
+        setPhase('disambiguate');
+        setDisambiguateData({ text: msg.text, options: msg.options || [] });
+        break;
+
       case 'safety_block':
         setPhase('error');
         setErrorMsg(msg.text);
@@ -143,6 +149,12 @@ function useAgentVoice() {
     sendControl(yes ? 'confirm:yes' : 'confirm:no');
     setPhase('executing');
     setConfirmData(null);
+  }, [sendControl]);
+
+  const choose = useCallback((idx) => {
+    sendControl(`choose:${idx}`);
+    setPhase('executing');
+    setDisambiguateData(null);
   }, [sendControl]);
 
   const cancelTask = useCallback(() => {
@@ -225,7 +237,7 @@ function useAgentVoice() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  return { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask, sendControl };
+  return { phase, transcript, language, statusText, steps, confirmData, disambiguateData, richResult, history, errorMsg, toggle, confirm, choose, cancelTask, sendControl };
 }
 
 /* ── Icon components ── */
@@ -269,20 +281,21 @@ const StepIcon = ({ status }) => {
 
 /* ── Status label per phase ── */
 const PHASE_LABEL = {
-  idle:         'Ready',
-  listening:    'Listening',
-  transcribing: 'Transcribing',
-  planning:     'Planning',
-  executing:    'Executing',
-  confirm:      'Confirm',
-  clarify:      'Clarifying',
-  done:         'Done ✓',
-  error:        'Error',
+  idle:          'Ready',
+  listening:     'Listening',
+  transcribing:  'Transcribing',
+  planning:      'Planning',
+  executing:     'Executing',
+  confirm:       'Confirm',
+  disambiguate:  'Choose File',
+  clarify:       'Clarifying',
+  done:          'Done ✓',
+  error:         'Error',
 };
 
 /* ── App ── */
 export default function App() {
-  const { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask } = useAgentVoice();
+  const { phase, transcript, language, statusText, steps, confirmData, disambiguateData, richResult, history, errorMsg, toggle, confirm, choose, cancelTask } = useAgentVoice();
 
   const isListening  = phase === 'listening';
   const isProcessing = ['transcribing','planning','executing'].includes(phase);
@@ -290,8 +303,9 @@ export default function App() {
   const isError      = phase === 'error';
   const isClarify    = phase === 'clarify';
   const isConfirm    = phase === 'confirm';
+  const isDisambiguate = phase === 'disambiguate';
   const showSummary = richResult?.label === 'Summary' || richResult?.label === 'Comparison';
-  const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify;
+  const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify || isDisambiguate;
 
   return (
     <div className={`app ${showSummary ? 'has-summary' : ''}`}>
@@ -308,6 +322,33 @@ export default function App() {
             <div className="confirm-actions">
               <button id="confirm-yes-btn" className="confirm-btn confirm-yes" onClick={() => confirm(true)}>Yes, do it</button>
               <button id="confirm-no-btn" className="confirm-btn confirm-no"  onClick={() => confirm(false)}>Skip</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disambiguate modal */}
+      {isDisambiguate && disambiguateData && (
+        <div className="confirm-overlay">
+          <div className="disambig-modal">
+            <div className="confirm-icon">🔍</div>
+            <div className="confirm-text">{disambiguateData.text}</div>
+            <div className="disambig-options">
+              {disambiguateData.options.map((path, idx) => {
+                const parts = path.split('/');
+                const filename = parts[parts.length - 1];
+                const dir = parts.slice(0, -1).join('/') || '/';
+                return (
+                  <button
+                    key={idx}
+                    className="disambig-option-btn"
+                    onClick={() => choose(idx)}
+                  >
+                    <span className="disambig-filename">{filename}</span>
+                    <span className="disambig-path">{dir}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -338,7 +379,7 @@ export default function App() {
               id="mic-toggle-btn"
               className={`mic-btn ${isListening ? 'active' : ''} ${isError ? 'err' : ''}`}
               onClick={toggle}
-              disabled={isProcessing || isConfirm}
+              disabled={isProcessing || isConfirm || isDisambiguate}
               aria-label={isListening ? 'Stop' : 'Start'}
               aria-pressed={isListening}
             >
@@ -520,6 +561,53 @@ export default function App() {
           border: 1px solid rgba(255,255,255,0.1);
         }
         .confirm-no:hover { background: rgba(255,255,255,0.1); }
+
+        .disambig-modal {
+          background: rgba(20,12,50,0.95);
+          border: 1px solid rgba(124,58,237,0.4);
+          border-radius: 20px;
+          padding: 32px 36px;
+          max-width: 460px;
+          width: 92%;
+          text-align: center;
+          box-shadow: 0 0 80px rgba(124,58,237,0.3);
+        }
+        .disambig-options {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .disambig-option-btn {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 2px;
+          padding: 12px 16px;
+          border-radius: 12px;
+          border: 1px solid rgba(124,58,237,0.25);
+          background: rgba(124,58,237,0.08);
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+        }
+        .disambig-option-btn:hover {
+          background: rgba(124,58,237,0.2);
+          border-color: rgba(124,58,237,0.5);
+          transform: translateX(2px);
+        }
+        .disambig-filename {
+          font-family: var(--font-ui);
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #e2d9f3;
+        }
+        .disambig-path {
+          font-family: var(--font-ui);
+          font-size: 0.72rem;
+          color: rgba(167,139,250,0.6);
+          word-break: break-all;
+        }
 
         .steps-list {
           display: flex; flex-direction: column; gap: 8px;
