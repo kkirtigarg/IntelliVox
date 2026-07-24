@@ -497,6 +497,17 @@ class AgentSession:
                     short = result["answer"][:220].replace("\n", " ").strip()
                     tts.speak(short)
 
+                elif tool == "organize_files" and result.get("details") is not None:
+                    moved = result.get("moved", 0)
+                    folders = result.get("folders_created", [])
+                    done_msg = result.get("message", f"Organised {moved} file(s)")
+                    detail_text = "\n".join(result["details"]) if result["details"] else "No files to move."
+                    await self.send({"type": "rich_result", "label": "Organised", "text": detail_text})
+                    speak_msg = f"Done. Moved {moved} file{'s' if moved != 1 else ''}"
+                    if folders:
+                        speak_msg += f" and created {len(folders)} folder{'s' if len(folders) != 1 else ''}"
+                    tts.speak(speak_msg)
+
                 if result.get("success") and verified:
                     step_done_msg: dict = {
                         "type":       "step_done",
@@ -628,6 +639,7 @@ def _describe_step(tool: str, args: dict) -> str:
         "delete_file":    lambda a: f"Deleting {a.get('path', '')}…",
         "move_file":      lambda a: f"Moving {a.get('src', '')} → {a.get('dst', '')}…",
         "open_file":      lambda a: f"Opening {a.get('path', '')}…",
+        "organize_files": lambda a: f"Organising {a.get('directory', '')} by {a.get('by', 'type')}…",
         "set_volume":     lambda a: f"Setting volume to {a.get('level', 50)}%…",
     }
     fn = descs.get(tool)
