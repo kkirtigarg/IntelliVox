@@ -1,3 +1,5 @@
-faster-whisper==1.2.1
+transformers>=4.36.0
+accelerate>=0.26.0
+torch>=2.0.0
 sounddevice==0.5.5
 numpy==2.4.2
