@@ -645,3 +645,36 @@ body {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.3); border-radius: 2px; }
+
+/* ── Narrow viewport (≤640px) ── */
+@media (max-width: 640px) {
+  .content { padding: 0 16px; }
+  .brand { margin-bottom: 28px; }
+  .mic-rings { width: 180px; height: 180px; }
+  .mic-btn   { width: 120px; height: 120px; }
+  .ring-1    { width: 150px; height: 150px; }
+  .ring-2    { width: 180px; height: 180px; }
+  .history-tray { max-width: 100%; }
+}
+
+/* ── Short viewport (≤700px tall) ── */
+@media (max-height: 700px) {
+  .brand        { margin-bottom: 20px; }
+  .waveform     { margin-top: 16px; height: 32px; }
+  .status-wrap  { margin-top: 20px; min-height: 56px; }
+  .transcript-card { margin-top: 16px; padding: 14px 18px; }
+  .hint         { margin-top: 12px; }
+  .history-tray { bottom: 16px; }
+}
+
+/* ── Very short viewport (≤550px tall) ── */
+@media (max-height: 550px) {
+  .brand        { display: none; }
+  .mic-rings    { width: 150px; height: 150px; }
+  .mic-btn      { width: 100px; height: 100px; }
+  .ring-1       { width: 120px; height: 120px; }
+  .ring-2       { width: 150px; height: 150px; }
+  .waveform     { margin-top: 10px; }
+  .status-wrap  { margin-top: 12px; min-height: 44px; }
+  .history-tray { display: none; }
+}

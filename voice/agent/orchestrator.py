@@ -55,6 +55,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("intellivox")
 
+
+def _is_clarification_needed(val) -> bool:
+    """Return True only when the LLM actually wants clarification.
+    Handles bool True/False and string 'true'/'false' from the LLM JSON."""
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return False
+    return str(val).strip().lower() not in ("false", "0", "no", "null", "none", "")
+
+
+def _has_unresolved_placeholders(args: dict) -> bool:
+    """Return True if any {{step_N_result.field}} placeholder remains after resolution."""
+    import re as _re
+    return bool(_re.search(r'\{\{step_\d+_result\.\w+\}\}', json.dumps(args)))
+
 WHISPER_MODEL_ID = "Systran/faster-whisper-medium"
 SAMPLE_RATE      = 16_000
 # Reject non-English speech before planning (set INTELLIVOX_ENGLISH_ONLY=false to disable)
@@ -217,7 +233,7 @@ class AgentSession:
         plan_ms = (time.perf_counter() - t0) * 1000
         self.audit.log_plan(action_plan, duration_ms=plan_ms)
 
-        if action_plan.get("clarification_needed"):
+        if _is_clarification_needed(action_plan.get("clarification_needed")):
             q = action_plan.get("clarification_question", "Could you rephrase that?")
             await self.send({"type": "clarify", "text": q})
             tts.speak(q)
@@ -264,6 +280,7 @@ class AgentSession:
                     err_msg = "Nothing to summarize — email content was not read."
                     await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
                     log.warning("[%s] skipping summarize — no mail body", self.session_id)
+                    step_results.append({"success": False})
                     step_idx += 1
                     continue
 
@@ -272,11 +289,13 @@ class AgentSession:
                     err_msg = "Nothing to compare — one or both sources were not read."
                     await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
                     log.warning("[%s] skipping compare_summarize — missing sources", self.session_id)
+                    step_results.append({"success": False})
                     step_idx += 1
                     continue
                 if "{{step_" in str(args.get("text_a", "")) or "{{step_" in str(args.get("text_b", "")):
                     err_msg = "Comparison sources were not loaded."
                     await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                    step_results.append({"success": False})
                     step_idx += 1
                     continue
 
@@ -284,6 +303,15 @@ class AgentSession:
                 err_msg = "PDF path not resolved — file search failed."
                 await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
                 log.warning("[%s] skipping read_pdf — unresolved path placeholder", self.session_id)
+                step_results.append({"success": False})
+                step_idx += 1
+                continue
+
+            if _has_unresolved_placeholders(args):
+                err_msg = "Skipped: a required previous step did not produce a result."
+                await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                step_results.append({"success": False})
+                log.warning("[%s] step %d skipped — unresolved placeholders", self.session_id, step_idx)
                 step_idx += 1
                 continue
 

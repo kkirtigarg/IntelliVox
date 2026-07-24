@@ -596,6 +596,10 @@ def _edit_plaintext(path: str, old_text: str, new_text: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+        if old_text == "":
+            with open(path, "a", encoding="utf-8") as f:
+                f.write("\n" + new_text)
+            return {"success": True, "message": f"Appended text to {path}", "path": path}
         if old_text not in content:
             return {"success": False, "message": f"Text not found in file: {old_text!r}"}
         with open(path, "w", encoding="utf-8") as f:
@@ -650,11 +654,17 @@ def _edit_excel(path: str, old_text: str, new_text: str) -> dict:
     try:
         wb = openpyxl.load_workbook(path)
         replaced = 0
+        old_lower = old_text.lower()
         for ws in wb.worksheets:
             for row in ws.iter_rows():
                 for cell in row:
-                    if cell.value is not None and old_text in str(cell.value):
-                        cell.value = str(cell.value).replace(old_text, new_text, 1)
+                    if cell.value is None:
+                        continue
+                    cell_str = str(cell.value)
+                    if old_lower in cell_str.lower():
+                        # Preserve original case by finding the actual substring position
+                        idx = cell_str.lower().find(old_lower)
+                        cell.value = cell_str[:idx] + new_text + cell_str[idx + len(old_text):]
                         replaced += 1
         if replaced == 0:
             return {"success": False, "message": f"Text not found in spreadsheet: {old_text!r}"}
@@ -673,5 +683,5 @@ def open_file(path: str) -> dict:
         return {"success": False, "message": f"File not found: {path}"}
     result = subprocess.run(["open", expanded], capture_output=True, text=True)
     if result.returncode == 0:
-        return {"success": True, "message": f"Opened {expanded}"}
+        return {"success": True, "message": f"Opened {expanded}", "path": expanded}
     return {"success": False, "message": result.stderr.strip()}
