@@ -12,6 +12,8 @@ function useAgentVoice() {
   const [phase, setPhase]         = useState('idle');
   // idle|listening|transcribing|planning|executing|confirm|done|error|clarify
   const [transcript, setTranscript] = useState('');
+  const [transcriptRaw, setTranscriptRaw] = useState('');
+  const [corrections, setCorrections] = useState([]);
   const [language, setLanguage]   = useState('');
   const [statusText, setStatusText] = useState('');
   const [steps, setSteps]         = useState([]);
@@ -47,11 +49,16 @@ function useAgentVoice() {
         setStatusText('Transcribing your voice…');
         break;
 
-      case 'transcribed':
-        setTranscript(msg.text);
+      case 'transcribed': {
+        const raw = msg.text_raw ?? msg.text;
+        const corrected = msg.text_corrected ?? msg.text;
+        setTranscriptRaw(raw);
+        setTranscript(corrected);
+        setCorrections(Array.isArray(msg.corrections) ? msg.corrections : []);
         setLanguage(msg.language || '');
-        setHistory(prev => msg.text ? [msg.text, ...prev].slice(0, 5) : prev);
+        setHistory(prev => corrected ? [corrected, ...prev].slice(0, 5) : prev);
         break;
+      }
 
       case 'planning':
         setPhase('planning');
@@ -144,6 +151,8 @@ function useAgentVoice() {
   /* ── Mic control ── */
   const startListening = useCallback(async () => {
     setTranscript('');
+    setTranscriptRaw('');
+    setCorrections([]);
     setLanguage('');
     setErrorMsg('');
     setSteps([]);
@@ -214,7 +223,7 @@ function useAgentVoice() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  return { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask, sendControl };
+  return { phase, transcript, transcriptRaw, corrections, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask, sendControl };
 }
 
 /* ── Icon components ── */
@@ -271,7 +280,7 @@ const PHASE_LABEL = {
 
 /* ── App ── */
 export default function App() {
-  const { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask } = useAgentVoice();
+  const { phase, transcript, transcriptRaw, corrections, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask } = useAgentVoice();
 
   const isListening  = phase === 'listening';
   const isProcessing = ['transcribing','planning','executing'].includes(phase);
@@ -280,7 +289,7 @@ export default function App() {
   const isClarify    = phase === 'clarify';
   const isConfirm    = phase === 'confirm';
   const showSummary = richResult?.label === 'Summary';
-  const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify;
+  const showCard     = !!transcript || !!transcriptRaw || steps.length > 0 || isProcessing || isDone || isError || isClarify;
 
   return (
     <div className={`app ${showSummary ? 'has-summary' : ''}`}>
@@ -356,7 +365,7 @@ export default function App() {
         {/* Main card */}
         <div className={`transcript-card ${showCard ? 'visible' : ''}`}>
           {/* Transcript */}
-          {transcript && (
+          {(transcriptRaw || transcript) && (
             <div style={{marginBottom: steps.length ? 16 : 0}}>
               <div className="transcript-label">
                 <div className="transcript-dot" style={{background: isListening ? '#06b6d4' : '#a78bfa'}} />
@@ -367,7 +376,25 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <div className="transcript-text">{transcript}</div>
+              {transcriptRaw && (
+                <div className="transcript-block">
+                  <div className="transcript-sublabel">Heard (Whisper)</div>
+                  <div className="transcript-text transcript-text-raw">{transcriptRaw}</div>
+                </div>
+              )}
+              {transcript && (
+                <div className="transcript-block" style={{marginTop: transcriptRaw ? 10 : 0}}>
+                  <div className="transcript-sublabel">Interpreted (fuzzy)</div>
+                  <div className="transcript-text">{transcript}</div>
+                </div>
+              )}
+              {corrections.length > 0 && (
+                <ul className="transcript-corrections">
+                  {corrections.map((note, i) => (
+                    <li key={i}>{note}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -546,6 +573,29 @@ export default function App() {
         .cancel-btn:hover { background: rgba(248,113,113,0.15); }
 
         .mic-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+        .transcript-block { margin-top: 8px; }
+        .transcript-sublabel {
+          font-size: 0.68rem;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.35);
+          margin-bottom: 4px;
+          font-family: var(--font-ui);
+        }
+        .transcript-text-raw {
+          color: rgba(255,255,255,0.55);
+          font-style: italic;
+        }
+        .transcript-corrections {
+          margin: 10px 0 0;
+          padding-left: 18px;
+          font-size: 0.72rem;
+          color: rgba(167,139,250,0.85);
+          font-family: var(--font-ui);
+          line-height: 1.5;
+        }
       `}</style>
     </div>
   );

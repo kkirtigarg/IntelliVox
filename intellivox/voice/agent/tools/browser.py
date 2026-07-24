@@ -2,13 +2,32 @@
 agent/tools/browser.py
 Browser and URL control tools.
 """
+import platform
 import subprocess
 import webbrowser
 import urllib.parse
 
+IS_WINDOWS = platform.system() == "Windows"
+IS_MAC     = platform.system() == "Darwin"
+
+# Windows executable names, tried via `start` (shell resolves via PATH / App Paths registry).
+WINDOWS_BROWSER_EXE = {
+    "chrome":  "chrome",
+    "firefox": "firefox",
+    "edge":    "msedge",
+    "safari":  "chrome",  # not available on Windows — fall back to Chrome
+}
+
 
 def open_browser(browser: str = "chrome") -> dict:
     """Open a browser application."""
+    if IS_WINDOWS:
+        exe = WINDOWS_BROWSER_EXE.get(browser.lower(), "chrome")
+        result = subprocess.run(["cmd", "/c", "start", "", exe], capture_output=True, text=True)
+        if result.returncode == 0:
+            return {"success": True, "message": f"Opened {browser}"}
+        return {"success": False, "message": result.stderr.strip() or f"Could not open {browser}"}
+
     browser_map = {
         "chrome": "Google Chrome",
         "firefox": "Firefox",
@@ -28,6 +47,18 @@ def navigate_url(url: str, browser: str = "chrome") -> dict:
     # Ensure URL has scheme
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+
+    if IS_WINDOWS:
+        exe = WINDOWS_BROWSER_EXE.get(browser.lower(), "chrome")
+        result = subprocess.run(["cmd", "/c", "start", "", exe, url], capture_output=True, text=True)
+        if result.returncode == 0:
+            return {"success": True, "message": f"Navigated to {url}"}
+        # Fallback: default browser via the stdlib
+        try:
+            webbrowser.open(url)
+            return {"success": True, "message": f"Navigated to {url}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
 
     browser_map = {
         "chrome": "Google Chrome",

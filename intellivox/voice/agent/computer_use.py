@@ -9,45 +9,52 @@ from __future__ import annotations
 
 import json
 import logging
+import platform
 import re
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
 log = logging.getLogger("intellivox.computer_use")
+
+IS_WINDOWS = platform.system() == "Windows"
+IS_MAC     = platform.system() == "Darwin"
+MODIFIER   = "cmd" if IS_MAC else "ctrl"
+PASTE_KEYS = ("command", "v") if IS_MAC else ("ctrl", "v")
 
 # Vision model — must support images in Ollama (e.g. llama3.2-vision, moondream)
 VISION_MODEL = "llama3.2-vision"
 MAX_STEPS = 20
 ACTION_DELAY = 0.8  # seconds after each action for UI to update
 
-SYSTEM_PROMPT = """You are a computer-use agent controlling a macOS desktop.
+SYSTEM_PROMPT = f"""You are a computer-use agent controlling a {"macOS" if IS_MAC else "Windows"} desktop.
 You receive screenshots and must complete the user's goal step by step.
 
 Respond with ONLY valid JSON (no markdown fences):
-{
+{{
   "thought": "brief reasoning about what you see and what to do next",
   "action": "click|double_click|type|press|scroll|wait|done|fail",
-  "args": {},
+  "args": {{}},
   "done": false
-}
+}}
 
 Actions and args:
-- click:       {"x": <int>, "y": <int>}           — pixel coordinates on screen
-- double_click:{"x": <int>, "y": <int>}
-- type:        {"text": "<string>"}                 — types into focused field
-- press:       {"key": "enter"|"space"|"tab"|"cmd+l"|"cmd+t"|"esc"|...}
-- scroll:      {"clicks": <int>}                   — positive=up, negative=down
-- wait:        {"seconds": <float>}                 — wait for page/load
-- done:        {"message": "<what was accomplished>"} — goal complete, set done=true
-- fail:        {"message": "<why impossible>"}      — cannot continue, set done=true
+- click:       {{"x": <int>, "y": <int>}}           — pixel coordinates on screen
+- double_click:{{"x": <int>, "y": <int>}}
+- type:        {{"text": "<string>"}}                 — types into focused field
+- press:       {{"key": "enter"|"space"|"tab"|"{MODIFIER}+l"|"{MODIFIER}+t"|"esc"|...}}
+- scroll:      {{"clicks": <int>}}                   — positive=up, negative=down
+- wait:        {{"seconds": <float>}}                 — wait for page/load
+- done:        {{"message": "<what was accomplished>"}} — goal complete, set done=true
+- fail:        {{"message": "<why impossible>"}}      — cannot continue, set done=true
 
 Rules:
 1. Use ONLY coordinates visible in the screenshot. Screen size is given each turn.
 2. One action per turn. Observe the result in the next screenshot before continuing.
 3. For web tasks: click search boxes, type queries, press enter, click first result, click play.
 4. For YouTube: search → click first video thumbnail → video usually autoplays; or click play button.
-5. If a browser address bar is needed, press cmd+l then type URL/query.
+5. If a browser address bar is needed, press {MODIFIER}+l then type URL/query.
 6. Set done=true only when the user's goal is clearly achieved.
 7. Prefer clicking visible buttons/links over blind keyboard shortcuts.
 8. If stuck after several attempts, use action "fail" with explanation.
@@ -65,7 +72,16 @@ def _screen_size() -> tuple[int, int]:
 
 def _capture_screenshot() -> tuple[str | None, str | None]:
     """Return (path, error)."""
-    tmp = Path("/tmp/intellivox_cu_screen.png")
+    tmp = Path(tempfile.gettempdir()) / "intellivox_cu_screen.png"
+
+    if not IS_MAC:
+        try:
+            from PIL import ImageGrab
+            ImageGrab.grab().save(str(tmp), "PNG")
+            return str(tmp), None
+        except Exception as e:
+            return None, f"screenshot failed: {e}"
+
     result = subprocess.run(
         ["screencapture", "-x", "-t", "png", str(tmp)],
         capture_output=True,
@@ -103,7 +119,7 @@ def _execute_action(action: str, args: dict) -> dict:
             try:
                 import pyperclip
                 pyperclip.copy(text)
-                pyautogui.hotkey("command", "v")
+                pyautogui.hotkey(*PASTE_KEYS)
             except Exception:
                 pyautogui.write(text, interval=0.03)
             return {"success": True, "message": f"Typed {len(text)} chars"}
@@ -111,6 +127,8 @@ def _execute_action(action: str, args: dict) -> dict:
         if action == "press":
             key = str(args.get("key", "enter")).lower()
             keys = [k.strip() for k in key.split("+")]
+            if not IS_MAC:
+                keys = ["ctrl" if k == "cmd" else k for k in keys]
             if len(keys) == 1:
                 pyautogui.press(keys[0])
             else:

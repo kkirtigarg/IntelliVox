@@ -2,22 +2,40 @@
 agent/verifier.py
 After each action, verifies that it succeeded using a screenshot.
 """
+import platform
 import subprocess
 import logging
 import time
 
 log = logging.getLogger("intellivox.verifier")
 
+IS_WINDOWS = platform.system() == "Windows"
+IS_MAC     = platform.system() == "Darwin"
+
 
 def get_frontmost_app() -> str:
-    """Return the name of the currently active macOS application."""
+    """Return the name (title) of the currently active application window."""
+    if IS_WINDOWS:
+        try:
+            import pygetwindow as gw
+            win = gw.getActiveWindow()
+            return win.title if win and win.title else "unknown"
+        except Exception:
+            return "unknown"
+
     script = 'tell application "System Events" to get name of first application process whose frontmost is true'
     result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
 def get_active_url() -> str:
-    """Return the URL currently open in Chrome (best-effort)."""
+    """Return the URL currently open in Chrome (best-effort, macOS only)."""
+    if not IS_MAC:
+        # No lightweight cross-platform way to read the address bar without a
+        # browser extension or UI-automation library; verify_url() falls back
+        # to checking that a browser window is frontmost instead.
+        return ""
+
     script = '''
     tell application "Google Chrome"
         if (count of windows) > 0 then
@@ -55,6 +73,21 @@ def verify_app_open(app_name: str, timeout: float = 3.0) -> dict:
 
 def verify_url(expected_url_fragment: str, timeout: float = 5.0) -> dict:
     """Check that Chrome's active tab URL contains the expected fragment."""
+    if not IS_MAC:
+        # Can't read the address bar without extra automation deps — best effort:
+        # confirm a browser window has become frontmost.
+        deadline = time.time() + timeout
+        browser_names = ("chrome", "firefox", "edge", "msedge", "safari")
+        while time.time() < deadline:
+            frontmost = get_frontmost_app().lower()
+            if any(b in frontmost for b in browser_names):
+                return {"success": True, "url": frontmost}
+            time.sleep(0.3)
+        return {
+            "success": False,
+            "message": f"No browser window frontmost (got '{get_frontmost_app()}')",
+        }
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         url = get_active_url()

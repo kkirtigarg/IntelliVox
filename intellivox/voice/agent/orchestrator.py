@@ -3,7 +3,7 @@ agent/orchestrator.py
 IntelliVox main server — combines Whisper ASR + Agent execution over WebSocket.
 
 Message protocol (server → client):
-  { "type": "transcribed",   "text": "...", "language": "en" }
+  { "type": "transcribed",   "text": "...", "text_raw": "...", "text_corrected": "...", "corrections": [], "language": "en" }
   { "type": "planning",      "text": "Figuring out your task…" }
   { "type": "plan",          "intent": "...", "explanation": "...", "steps": [...] }
   { "type": "safety_block",  "text": "I can't do that: ..." }
@@ -43,6 +43,7 @@ from agent.planner import plan, resolve_step_args
 from agent.tools import run_tool
 from agent.verifier import verify_step
 from agent.audit import AuditSession
+from automation.fuzzy import correct_transcript
 
 logging.basicConfig(
     level=logging.INFO,
@@ -166,7 +167,20 @@ class AgentSession:
             await self.send({"type": "error", "text": "I didn't catch that. Please try again."})
             return
 
-        self.audit.log_transcript(text, language)
+        raw_text = transcript_result.get("text_raw", text)
+        if transcript_result.get("text_corrected") is not None:
+            text = transcript_result["text_corrected"]
+        else:
+            fuzzy = correct_transcript(text.strip())
+            if fuzzy.notes:
+                log.info(
+                    "[%s] Fuzzy corrections: %s",
+                    self.session_id,
+                    "; ".join(fuzzy.notes),
+                )
+            text = fuzzy.text
+
+        self.audit.log_transcript(raw_text, language)
         log.info("[%s] Transcript [%s]: %s", self.session_id, language, text)
 
         # ── 1. Plan ──────────────────────────────────────────────────────────
@@ -377,14 +391,31 @@ async def ws_endpoint(ws: WebSocket):
                     await session.send({"type": "error", "text": f"Transcription failed: {e}"})
                     continue
 
+                raw = (result.get("text") or "").strip()
+                fuzzy = correct_transcript(raw)
+                if fuzzy.notes:
+                    log.info(
+                        "[%s] Fuzzy corrections: %s",
+                        session.session_id,
+                        "; ".join(fuzzy.notes),
+                    )
+
                 await session.send({
-                    "type":     "transcribed",
-                    "text":     result["text"],
-                    "language": result["language"],
+                    "type":            "transcribed",
+                    "text":            fuzzy.text,
+                    "text_raw":        raw,
+                    "text_corrected":  fuzzy.text,
+                    "corrections":     fuzzy.notes,
+                    "language":        result["language"],
                 })
 
                 # Run agent in background so control messages can still arrive
-                asyncio.create_task(session.run_task(result))
+                asyncio.create_task(session.run_task({
+                    "text":            raw,
+                    "text_raw":        raw,
+                    "text_corrected":  fuzzy.text,
+                    "language":        result["language"],
+                }))
 
             # Text control message
             elif "text" in msg and msg["text"]:

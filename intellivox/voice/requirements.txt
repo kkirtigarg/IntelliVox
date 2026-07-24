@@ -34,6 +34,7 @@ httpx==0.28.1
 PyAutoGUI==0.9.54
 pyperclip==1.11.0
 pyobjc==12.2.1; sys_platform == "darwin"
+pycaw==20240210; sys_platform == "win32"      # volume control (set_volume)
 
 # ── Documents (PDF read / summarize) ──────────────────────────────────────────
 pdfplumber==0.11.10
