@@ -1,77 +1,137 @@
-# IntelliVox Desktop
+# IntelliVox
 
-Cross-platform voice agent **desktop app** for **macOS**, **Windows**, and **Linux**.
+Voice-controlled desktop agent for **macOS** (primary). Speak natural commands; IntelliVox transcribes with Whisper, plans steps with a local LLM (Ollama), runs tools with safety guardrails, and shows live progress plus summaries in a native UI.
 
-Built with React + Electron. This package is the **UI only** — it connects to your agent backend over WebSocket. Whisper, speech-to-text, and task execution run in a separate backend (e.g. the `voice/` folder in this repo).
+```
+Voice → Whisper ASR → Planner → Safety → Tools → WebSocket UI
+```
 
-## Quick start (desktop)
+## Repository layout
+
+| Path | Description |
+|------|-------------|
+| [`voice/`](voice/) | Python backend — ASR, planner, safety, tools, WebSocket server |
+| [`intellivox-ui/`](intellivox-ui/) | React + Electron desktop UI (mic, steps, summary panel) |
+
+## Quick start
+
+### 1. Backend
+
+```bash
+cd voice
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium   # optional, for web_browse tool
+
+# Requires Ollama + model:
+#   brew install ollama && ollama pull llama3.1
+
+python -m agent.orchestrator
+# → ws://127.0.0.1:8765/ws
+```
+
+### 2. Desktop UI
 
 ```bash
 cd intellivox-ui
 npm install
-cp .env.example .env          # set backend WebSocket URL
-npm run desktop               # native window + hot reload
+cp .env.example .env
+npm run desktop
 ```
 
-Start your agent backend separately before using the mic:
-
-```bash
-# example — from repo root
-cd ../voice && .venv/bin/python -m agent.orchestrator
-```
+See [`voice/README.md`](voice/README.md) and [`intellivox-ui/README.md`](intellivox-ui/README.md) for details.
 
 ## Build installers
 
-Build for your current OS:
+From `intellivox-ui/`:
 
 ```bash
-npm run desktop:build
+npm run desktop:build        # current OS → release/
+npm run desktop:build:mac    # .dmg + .zip
+npm run desktop:build:win    # NSIS + portable .exe
+npm run desktop:build:linux  # AppImage + .deb
 ```
 
-Platform-specific:
+## What it can do
 
-```bash
-npm run desktop:build:mac      # .dmg + .zip
-npm run desktop:build:win      # NSIS installer + portable .exe
-npm run desktop:build:linux    # AppImage + .deb
-```
+### Browser & media
+- Open Chrome (signed-in profile)
+- Google search, YouTube search, **YouTube play** (top result + autoplay)
 
-Installers are written to `release/`.
+### Gmail (Chrome)
+- Open inbox / search, read messages, **summarize mail** (summary panel)
+- Optional save summary to `.txt`
+
+### Documents & PDFs
+- Find files (Spotlight + Downloads fallback)
+- Read & summarize PDFs
+- **Compare two PDFs** with fuzzy name matching + confirm on partial matches
+- **Compare mail + PDF** and summarize differences
+- Answer questions about document text
+
+### Code
+- Summarize a codebase folder; save summary to Desktop
+
+### Desktop
+- Open/close apps, screenshots, volume, keyboard/mouse (with confirm where needed)
+
+### Safety
+- Rule-based **ALLOW / CONFIRM / BLOCK** (deterministic, no LLM in safety)
+- User confirm for destructive or high-risk actions
+- Cancel / pause mid-task
+- Prompt-injection filtering on read content
+
+## Demo commands
+
+| Say | Result |
+|-----|--------|
+| *Play Kabira song on YouTube* | Opens & plays top video in Chrome |
+| *Open Gmail and summarize my mail* | Inbox summary in UI panel |
+| *Compare Shivam and Jaya PDFs in Downloads and summarize* | Comparison panel (confirm if fuzzy match) |
+| *Summarize the intellivox-ui codebase* | Bullet code overview |
+| *Search Google for weather in Delhi* | Google results in Chrome |
+
+## macOS setup (recommended)
+
+1. **Chrome** — signed into Gmail / YouTube  
+2. **Chrome → View → Developer → Allow JavaScript from Apple Events** (Gmail read)  
+3. **System Settings → Privacy** — Microphone, Accessibility (clipboard/Gmail fallback), Automation as prompted  
+4. Optional: `export INTELLIVOX_CHROME_PROFILE="Default"` if using a non-default Chrome profile  
 
 ## Configuration
 
-Set the backend WebSocket URL in `.env` before building or running:
+Backend env vars (`voice/.env` — copy from `.env.example`):
 
-```
-VITE_WS_URL=ws://127.0.0.1:8765/ws
-```
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `INTELLIVOX_ENGLISH_ONLY` | `true` | Reject non-English voice input |
+| `INTELLIVOX_CHROME_PROFILE` | auto | Chrome profile directory name |
+| `INTELLIVOX_VISION_MODEL` | `llama3.2-vision` | Model for `computer_use` |
+| `INTELLIVOX_MAX_REPLANS` | `2` | Replan attempts after step failure |
+| `OPIK_DISABLED` | — | Set `true` to disable tracing |
 
-This is baked into the app at build time. Change `.env` and rebuild to point at a different server.
+UI: `VITE_WS_URL=ws://127.0.0.1:8765/ws` in `intellivox-ui/.env`
 
-## Browser mode (optional)
+## Observability
 
-You can still run the UI in a browser for development:
+Tracing via [Comet Opik](voice/OBSERVABILITY.md) (optional). Local metrics:
 
 ```bash
-npm run dev    # http://localhost:5173
+curl http://127.0.0.1:8765/health
+curl http://127.0.0.1:8765/metrics
+python -m evals.run
 ```
 
-## What's included
+Audit logs: `voice/audit_logs/`
 
-| Included | Not included |
-|----------|--------------|
-| Native desktop window (Electron) | Whisper / ASR |
-| React UI (mic, waveform, steps) | Task planner |
-| WebSocket client | Desktop automation tools |
-| macOS / Windows / Linux installers | Python backend |
+## Not supported (current)
 
-## Project layout
+- YouTube commenting (removed)
+- PDF → spreadsheet / slide editing
+- Spoken batch file organize (partial)
+- Reliable `computer_use` for demos (prefer browser tools)
 
-```
-intellivox-ui/
-├── electron/    # Desktop shell (main + preload)
-├── src/         # React UI
-├── public/      # Static assets
-├── dist/        # Web build (used by packaged app)
-└── release/     # Installers (after desktop:build)
-```
+## License
+
+See repository license file if present.
