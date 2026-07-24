@@ -51,6 +51,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("intellivox")
 
+
+def _is_clarification_needed(val) -> bool:
+    """Return True only when the LLM actually wants clarification.
+    Handles bool True/False and string 'true'/'false' from the LLM JSON."""
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return False
+    return str(val).strip().lower() not in ("false", "0", "no", "null", "none", "")
+
+
+def _has_unresolved_placeholders(args: dict) -> bool:
+    """Return True if any {{step_N_result.field}} placeholder remains after resolution."""
+    import re as _re
+    return bool(_re.search(r'\{\{step_\d+_result\.\w+\}\}', json.dumps(args)))
+
 WHISPER_MODEL_ID = "Systran/faster-whisper-medium"
 SAMPLE_RATE      = 16_000
 
@@ -177,7 +193,7 @@ class AgentSession:
         action_plan = await loop.run_in_executor(None, plan, text)
         self.audit.log_plan(action_plan)
 
-        if action_plan.get("clarification_needed"):
+        if _is_clarification_needed(action_plan.get("clarification_needed")):
             q = action_plan.get("clarification_question", "Could you rephrase that?")
             await self.send({"type": "clarify", "text": q})
             tts.speak(q)
@@ -215,6 +231,14 @@ class AgentSession:
 
             # ── Resolve placeholders from previous step results (chaining) ────
             args = resolve_step_args(args, step_results)
+
+            # Skip step if a required prior step failed and its result is missing
+            if _has_unresolved_placeholders(args):
+                await self.send({"type": "step_failed", "step_index": i,
+                                 "text": "Skipped: a required previous step did not produce a result."})
+                step_results.append({"success": False})
+                log.warning("[%s] step %d skipped — unresolved placeholders", self.session_id, i)
+                continue
 
             # ── Safety check ─────────────────────────────────────────────────
             safety_result = safety.check(tool, args, source="voice")
