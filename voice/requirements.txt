@@ -1,0 +1,49 @@
+# IntelliVox voice agent — Python dependencies
+#
+# Prerequisites (install separately):
+#   • Python 3.11+ (3.13 tested)
+#   • ffmpeg          — brew install ffmpeg  /  apt install ffmpeg
+#   • Ollama          — https://ollama.com  +  ollama pull llama3.1
+#   • Vision (computer_use): ollama pull llama3.2-vision
+#
+# Setup:
+#   cd voice
+#   python3 -m venv .venv
+#   source .venv/bin/activate      # Windows: .venv\Scripts\activate
+#   pip install -r requirements.txt
+#   python -m agent.orchestrator   # starts server on ws://127.0.0.1:8765/ws
+#
+# macOS permissions (System Settings → Privacy & Security):
+#   • Microphone, Screen Recording, Accessibility, Automation
+
+# ── Web server ────────────────────────────────────────────────────────────────
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+python-multipart==0.0.32
+starlette==0.51.0
+
+# ── Speech-to-text (Whisper) ──────────────────────────────────────────────────
+faster-whisper==1.2.1
+numpy==2.4.6
+
+# ── LLM planner / summarizer (talks to local Ollama) ──────────────────────────
+ollama==0.6.2
+httpx==0.28.1
+
+# ── Desktop automation (computer_use, click, type) ───────────────────────────
+PyAutoGUI==0.9.54
+pyperclip==1.11.0
+pyobjc==12.2.1; sys_platform == "darwin"
+
+# ── Documents (PDF read / summarize) ──────────────────────────────────────────
+pdfplumber==0.11.10
+pypdf==6.14.2
+
+# ── Text-to-speech (local, offline) ─────────────────────────────────────────
+pyttsx3==2.99
+
+# ── Screenshots / image handling ──────────────────────────────────────────────
+pillow==12.3.0
+
+# ── Optional: live mic test script (voice/test_whisper.py) ───────────────────
+sounddevice==0.5.5

@@ -1,0 +1,22 @@
+{"type": "transcript", "text": "Go to Google Chrome and search a trailer shift song and play it on YouTube.", "language": "en", "ts": "2026-07-24T14:13:50.407759+00:00"}
+{"type": "plan", "plan": {"intent": "Search for music", "explanation": "Open Google Chrome, search for 'trailer shift song', navigate to the first result, and play it on YouTube.", "steps": [{"tool": "open_browser", "args": {"browser": "chrome"}}, {"tool": "google_search", "args": {"query": "trailer shift song"}}, {"tool": "navigate_url", "args": {"url": "{{step_2_result.url}}", "browser": "chrome"}}, {"tool": "press_key", "args": {"key": "enter"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T14:14:00.207907+00:00"}
+{"type": "safety", "tool": "open_browser", "args": {"browser": "chrome"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:00.208900+00:00"}
+{"type": "action", "tool": "open_browser", "args": {"browser": "chrome"}, "result": {"success": true, "message": "Opened Google Chrome"}, "verified": true, "ts": "2026-07-24T14:14:01.431055+00:00"}
+{"type": "safety", "tool": "google_search", "args": {"query": "trailer shift song"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:01.432503+00:00"}
+{"type": "action", "tool": "google_search", "args": {"query": "trailer shift song"}, "result": {"success": true, "message": "Navigated to https://www.google.com/search?q=trailer+shift+song"}, "verified": true, "ts": "2026-07-24T14:14:02.319477+00:00"}
+{"type": "safety", "tool": "navigate_url", "args": {"url": "{{step_2_result.url}}", "browser": "chrome"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:02.320012+00:00"}
+{"type": "action", "tool": "navigate_url", "args": {"url": "{{step_2_result.url}}", "browser": "chrome"}, "result": {"success": true, "message": "Navigated to https://{{step_2_result.url}}"}, "verified": false, "ts": "2026-07-24T14:14:08.419534+00:00"}
+{"type": "error", "message": "Navigated to https://{{step_2_result.url}}", "ts": "2026-07-24T14:14:08.420015+00:00"}
+{"type": "safety", "tool": "press_key", "args": {"key": "enter"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:08.420148+00:00"}
+{"type": "action", "tool": "press_key", "args": {"key": "enter"}, "result": {"success": true, "message": "Pressed: enter"}, "verified": true, "ts": "2026-07-24T14:14:09.087109+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 3 of 4 steps.", "ts": "2026-07-24T14:14:09.088034+00:00"}
+{"type": "transcript", "text": "go to go to first link and play the song.", "language": "en", "ts": "2026-07-24T14:14:34.785603+00:00"}
+{"type": "plan", "plan": {"intent": "open_browser_and_play_song", "explanation": "Open browser, navigate to first link, and play the song.", "steps": [{"tool": "open_browser", "args": {"browser": "chrome"}}, {"tool": "navigate_url", "args": {"url": "{{step_1_result.url}}"}}, {"tool": "press_key", "args": {"key": "space"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T14:14:42.128393+00:00"}
+{"type": "safety", "tool": "open_browser", "args": {"browser": "chrome"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:42.129215+00:00"}
+{"type": "action", "tool": "open_browser", "args": {"browser": "chrome"}, "result": {"success": true, "message": "Opened Google Chrome"}, "verified": true, "ts": "2026-07-24T14:14:43.016313+00:00"}
+{"type": "safety", "tool": "navigate_url", "args": {"url": "{{step_1_result.url}}"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:43.017961+00:00"}
+{"type": "action", "tool": "navigate_url", "args": {"url": "{{step_1_result.url}}"}, "result": {"success": true, "message": "Navigated to https://{{step_1_result.url}}"}, "verified": false, "ts": "2026-07-24T14:14:49.186878+00:00"}
+{"type": "error", "message": "Navigated to https://{{step_1_result.url}}", "ts": "2026-07-24T14:14:49.187383+00:00"}
+{"type": "safety", "tool": "press_key", "args": {"key": "space"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T14:14:49.187547+00:00"}
+{"type": "action", "tool": "press_key", "args": {"key": "space"}, "result": {"success": true, "message": "Pressed: space"}, "verified": true, "ts": "2026-07-24T14:14:49.819410+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 2 of 3 steps.", "ts": "2026-07-24T14:14:49.820590+00:00"}

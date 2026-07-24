@@ -101,6 +101,89 @@ def summarize(text: str, style: str = "concise") -> dict:
         return {"success": False, "message": f"Summarization failed: {e}"}
 
 
+def summarize_codebase(directory: str = "", style: str = "bullets", path: str = "") -> dict:
+    """
+    Read source files in a project folder and summarize the codebase.
+    Skips node_modules, .git, venv, dist, etc.
+    Returns: { success, summary, files_read, directory }
+    """
+    directory = directory or path
+    if not directory:
+        return {"success": False, "message": "No directory provided"}
+    expanded = str(Path(directory).expanduser().resolve())
+    if not os.path.isdir(expanded):
+        return {"success": False, "message": f"Not a directory: {directory}"}
+
+    if not expanded.startswith(HOME):
+        return {"success": False, "message": "Access denied: outside home directory"}
+
+    code_ext = {
+        ".py", ".js", ".jsx", ".ts", ".tsx", ".md", ".json", ".html", ".css",
+        ".cjs", ".mjs", ".yaml", ".yml", ".toml", ".rs", ".go", ".java", ".sql",
+    }
+    skip_dirs = {
+        ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "release",
+        "build", ".cursor", "audit_logs",
+    }
+
+    collected: list[tuple[str, str]] = []
+    total_chars = 0
+
+    for root, dirs, files in os.walk(expanded):
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".")]
+        for fname in sorted(files):
+            if fname.startswith("."):
+                continue
+            ext = Path(fname).suffix.lower()
+            if ext not in code_ext:
+                continue
+            fpath = os.path.join(root, fname)
+            rel = os.path.relpath(fpath, expanded)
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+            except OSError:
+                continue
+            chunk = f"--- {rel} ---\n{content}\n"
+            if total_chars + len(chunk) > MAX_CHARS:
+                break
+            collected.append((rel, content))
+            total_chars += len(chunk)
+            if len(collected) >= 40:
+                break
+        if total_chars >= MAX_CHARS or len(collected) >= 40:
+            break
+
+    if not collected:
+        return {"success": False, "message": f"No readable source files in {expanded}"}
+
+    bundle = "\n".join(f"--- {rel} ---\n{body}" for rel, body in collected)
+    style_prompts = {
+        "concise": "Summarize this codebase in 3-5 sentences: purpose, main components, and tech stack.",
+        "detailed": "Write a detailed summary: architecture, folders, key files, and how parts connect.",
+        "bullets": "Summarize as bullet points: project purpose, folder structure, main modules, tech stack.",
+    }
+    instruction = style_prompts.get(style, style_prompts["bullets"])
+    prompt = f"{instruction}\n\nCodebase ({len(collected)} files from {expanded}):\n{bundle[:MAX_CHARS]}"
+
+    try:
+        import ollama
+        response = ollama.chat(
+            model="llama3.1",
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.3},
+        )
+        summary = response["message"]["content"].strip()
+        return {
+            "success": True,
+            "summary": summary,
+            "files_read": len(collected),
+            "directory": expanded,
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Codebase summarization failed: {e}"}
+
+
 def answer_question(text: str, question: str) -> dict:
     """
     Answer a specific question about a document's content using local LLM.

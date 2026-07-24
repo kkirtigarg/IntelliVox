@@ -130,8 +130,26 @@ DOCUMENTS & AI:
   read_pdf(path: str)          ← extracts all text from a PDF, returns .text field
   summarize(text: str, style="concise"|"detailed"|"bullets")
                                ← summarizes text using local LLM
+  summarize_codebase(directory: str, style="bullets")
+                               ← reads source files in a folder and summarizes the project
   answer_question(text: str, question: str)
                                ← answers a question about document content
+
+COMPUTER USE (general — prefer for interactive tasks):
+  computer_use(goal: str)      ← sees the screen, clicks/types like a human until done.
+                               USE THIS for play song, click links, forms, any UI task.
+
+8. For "summarize code / go through folder / explain project":
+   Do NOT open Finder unless user explicitly asks to open it.
+   Step 1: find_file(name="<folder name>")
+   Step 2: summarize_codebase(directory={{{{step_1_result.path}}}}, style="bullets")
+
+9. GENERAL RULE — use computer_use for ANY task requiring on-screen interaction
+   like a human: clicking links, playing videos, forms, buttons, menus.
+   Do NOT chain open_browser + navigate_url + press_key for these.
+   Use ONE step: computer_use(goal="<full user instruction>")
+   Keep open_app / navigate_url / find_file ONLY for simple single actions
+   with no further UI interaction (e.g. "open Finder", "go to google.com").
 
 ═══════════════════════════════════════════════════
 CHAINING EXAMPLES
@@ -150,6 +168,16 @@ CHAINING EXAMPLES
   Step 1: open_app(name="Finder")
   Step 2: find_file(name="Talent Hack")
   Step 3: open_file(path={{step_2_result.path}})
+
+"go through IntelliVox folder and summarize the code":
+  Step 1: find_file(name="IntelliVox")
+  Step 2: summarize_codebase(directory={{{{step_1_result.path}}}}, style="bullets")
+
+"search YouTube for a song and play it":
+  Step 1: computer_use(goal="Open Chrome, search YouTube for <song name>, click the first video, and play it")
+
+"go to first link and play the song":
+  Step 1: computer_use(goal="Click the first link on the current page and play the song/video")
 
 ═══════════════════════════════════════════════════
 RESPONSE FORMAT (strict JSON, no markdown fences)

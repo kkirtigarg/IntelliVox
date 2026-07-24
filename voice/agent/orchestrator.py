@@ -78,16 +78,29 @@ def _load_whisper() -> WhisperModel:
 
 # ── Audio conversion ───────────────────────────────────────────────────────────
 
+def _audio_suffix(data: bytes) -> str:
+    """Pick a file extension so ffmpeg can parse the container."""
+    if len(data) >= 4 and data[:4] == b"\x1a\x45\xdf\xa3":
+        return ".webm"
+    if len(data) >= 8 and data[4:8] == b"ftyp":
+        return ".mp4"
+    if len(data) >= 4 and data[:4] == b"OggS":
+        return ".ogg"
+    if len(data) >= 4 and data[:4] == b"RIFF":
+        return ".wav"
+    return ".webm"
+
+
 def webm_to_pcm(data: bytes) -> np.ndarray:
-    # Use empty suffix so ffmpeg auto-detects format (webm, mp4, wav) from magic bytes
-    with tempfile.NamedTemporaryFile(suffix="", delete=False) as tmp:
+    suffix = _audio_suffix(data)
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(data)
         tmp_path = tmp.name
     cmd = ["ffmpeg", "-y", "-i", tmp_path, "-ar", str(SAMPLE_RATE), "-ac", "1", "-f", "f32le", "-"]
     result = subprocess.run(cmd, capture_output=True)
     Path(tmp_path).unlink(missing_ok=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg: {result.stderr.decode()}")
+        raise RuntimeError(f"ffmpeg ({suffix}): {result.stderr.decode()}")
     return np.frombuffer(result.stdout, dtype=np.float32)
 
 
@@ -260,7 +273,11 @@ class AgentSession:
                     log.info("[%s] find_file -> %s", self.session_id, found_path)
                     if i + 1 < len(steps):
                         ns = steps[i + 1]
-                        if ns.get("tool") in ("open_file", "read_pdf", "read_file"):
+                        next_tool = ns.get("tool")
+                        if next_tool == "summarize_codebase":
+                            ns["args"]["directory"] = found_path
+                            ns["args"].pop("path", None)
+                        elif next_tool in ("open_file", "read_pdf", "read_file"):
                             ns["args"]["path"] = found_path
 
                 # read_pdf: inject text into next summarize/answer step
@@ -272,9 +289,12 @@ class AgentSession:
                         if ns.get("tool") in ("summarize", "answer_question"):
                             ns["args"]["text"] = result["text"]
 
-                # summarize: display full summary in UI + speak excerpt
-                elif tool == "summarize" and result.get("summary"):
-                    done_msg = "Summary complete"
+                # summarize / summarize_codebase: display full summary in UI + speak excerpt
+                elif tool in ("summarize", "summarize_codebase") and result.get("summary"):
+                    if tool == "summarize_codebase":
+                        done_msg = f"Summarized {result.get('files_read', '?')} files"
+                    else:
+                        done_msg = "Summary complete"
                     await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
                     short = result["summary"][:220].replace("\n", " ").strip()
                     tts.speak(short)
@@ -318,6 +338,8 @@ def _describe_step(tool: str, args: dict) -> str:
         "find_file":      lambda a: f"🔍 Searching for '{a.get('name', '')}'…",
         "list_files":     lambda a: f"Listing files in {a.get('directory', '~')}…",
         "read_file":      lambda a: f"Reading {a.get('path', '')}…",
+        "summarize_codebase": lambda a: f"Summarizing code in {a.get('directory', '')}…",
+        "computer_use":   lambda a: f"Controlling computer: {a.get('goal', '')[:80]}…",
         "write_file":     lambda a: f"Writing to {a.get('path', '')}…",
         "delete_file":    lambda a: f"Deleting {a.get('path', '')}…",
         "move_file":      lambda a: f"Moving {a.get('src', '')} → {a.get('dst', '')}…",
@@ -343,7 +365,7 @@ async def ws_endpoint(ws: WebSocket):
             # Audio blob → transcribe + run agent
             if "bytes" in msg and msg["bytes"]:
                 data = msg["bytes"]
-                log.info("[%s] Received %.1f KB audio", session.session_id, len(data) / 1024)
+                log.info("[%s] Received %.1f KB audio (%s)", session.session_id, len(data) / 1024, _audio_suffix(data))
                 await session.send({"type": "transcribing", "text": "Transcribing…"})
 
                 loop = asyncio.get_event_loop()

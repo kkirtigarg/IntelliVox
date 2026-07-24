@@ -24,7 +24,7 @@ SAFE_TOOLS = {
     "open_browser", "navigate_url", "google_search", "youtube_search",
     "open_app", "take_screenshot", "list_files", "read_file",
     "press_key", "set_volume", "open_file", "find_file",
-    "read_pdf", "summarize", "answer_question",
+    "read_pdf", "summarize", "summarize_codebase", "answer_question",
 }
 
 # Tools that need explicit user confirmation before running
@@ -34,6 +34,7 @@ CONFIRM_TOOLS = {
     "close_app":    "This will close an application.",
     "type_text":    "This will type text into the active window.",
     "click":        "This will click somewhere on your screen.",
+    "computer_use": "This will control your mouse and keyboard autonomously to complete the task — like a human using the computer.",
     "delete_file":  "⚠ This will permanently delete a file.",
 }
 

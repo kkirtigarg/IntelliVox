@@ -7,7 +7,8 @@ from pathlib import Path
 from .browser import open_browser, navigate_url, google_search, youtube_search
 from .desktop import open_app, close_app, type_text, press_key, click, take_screenshot, set_volume
 from .files   import list_files, read_file, write_file, delete_file, move_file, open_file, find_file
-from .document import read_pdf, summarize, answer_question
+from .document import read_pdf, summarize, answer_question, summarize_codebase
+from .computer import computer_use
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
 TOOLS = {
@@ -38,7 +39,11 @@ TOOLS = {
     # Documents & AI
     "read_pdf":        read_pdf,
     "summarize":       summarize,
+    "summarize_codebase": summarize_codebase,
     "answer_question": answer_question,
+
+    # General computer control (vision + mouse/keyboard loop)
+    "computer_use":    computer_use,
 }
 
 
