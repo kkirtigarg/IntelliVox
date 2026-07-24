@@ -29,6 +29,29 @@ def _mask(text: str) -> str:
     return text
 
 
+_CONTENT_KEYS = frozenset({
+    "text", "text_a", "text_b", "content", "body", "summary", "answer",
+})
+_MAX_AUDIT_STR = 500
+
+
+def _truncate_audit_value(key: str, value: str) -> str:
+    if key in _CONTENT_KEYS and len(value) > _MAX_AUDIT_STR:
+        return f"{value[:_MAX_AUDIT_STR]}… [{len(value)} chars total]"
+    return value
+
+
+def _sanitize_for_audit(obj, key: str = ""):
+    """Mask and truncate values safely — never round-trip through JSON strings."""
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_audit(v, k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_audit(v, key) for v in obj]
+    if isinstance(obj, str):
+        return _mask(_truncate_audit_value(key, obj))
+    return obj
+
+
 class AuditSession:
     """Tracks one user interaction from transcript to final outcome."""
 
@@ -52,8 +75,7 @@ class AuditSession:
         self._write(entry)
 
     def log_plan(self, plan: dict, duration_ms: float | None = None):
-        safe_plan = json.loads(_mask(json.dumps(plan)))
-        entry = {"type": "plan", "plan": safe_plan}
+        entry = {"type": "plan", "plan": _sanitize_for_audit(plan)}
         if duration_ms is not None:
             entry["duration_ms"] = round(duration_ms, 1)
         self._write(entry)
@@ -62,7 +84,7 @@ class AuditSession:
         self._write({
             "type":     "safety",
             "tool":     tool,
-            "args":     json.loads(_mask(json.dumps(args))),
+            "args":     _sanitize_for_audit(args),
             "decision": decision,
             "reason":   reason,
         })
@@ -79,8 +101,8 @@ class AuditSession:
         entry = {
             "type":     "action",
             "tool":     tool,
-            "args":     json.loads(_mask(json.dumps(args))),
-            "result":   result,
+            "args":     _sanitize_for_audit(args),
+            "result":   _sanitize_for_audit(result),
             "verified": verified,
         }
         if step_index is not None:

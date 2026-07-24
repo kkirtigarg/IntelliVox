@@ -1,0 +1,1 @@
+{"type": "safety", "tool": "compare_summarize", "args": {"text_a": "Offer letter\nSalary: 100000\nPath: C:\\Users\\foo\tbar", "text_b": "Resume\nSkills: Python\backslash test", "label_a": "Offer.pdf", "style": "bullets"}, "decision": "allow", "reason": "safe tool", "ts": "2026-07-24T19:07:48.771514+00:00"}

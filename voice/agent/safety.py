@@ -23,8 +23,9 @@ class SafetyResult(NamedTuple):
 SAFE_TOOLS = {
     "open_browser", "navigate_url", "google_search", "youtube_search", "youtube_play",
     "open_app", "take_screenshot", "list_files", "read_file",
-    "press_key", "set_volume", "open_file", "find_file",
+    "press_key", "set_volume", "open_file", "find_file", "find_compare_pdf_pair",
     "read_pdf", "summarize", "summarize_codebase", "save_summary_file", "answer_question",
+    "compare_summarize", "compare_and_summarize",
     "search_mail", "read_mail", "open_gmail", "read_gmail",
 }
 

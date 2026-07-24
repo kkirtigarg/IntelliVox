@@ -134,7 +134,8 @@ FILES:
 DOCUMENTS & AI:
   read_pdf(path: str)          ← extracts all text from a PDF, returns .text field
   summarize(text: str, style="concise"|"detailed"|"bullets")
-                               ← summarizes text using local LLM
+  compare_summarize(text_a, text_b, label_a, label_b, style="bullets")
+                               ← compare two sources (e.g. mail + PDF)
   summarize_codebase(directory: str, style="bullets")
   save_summary_file(summary: str, filename: str, directory="~/Desktop")
                                ← saves summary text to a .txt file
@@ -173,6 +174,10 @@ COMPUTER USE (last resort — vision is slow and unreliable):
    Step 1: open_gmail(browser="chrome", recent=True)  ← opens Gmail inbox in Chrome
    Step 2: read_gmail(limit=5, wait=5)               ← top 5 inbox messages
    Step 3: summarize(text={{{{step_2_result.body}}}}, style="bullets")
+
+11b. COMPARE two sources — use compare_summarize (NOT single summarize):
+   "Compare my mail with report.pdf and summarize" → open_gmail, read_gmail, find_file, read_pdf, compare_summarize
+   "Compare report.pdf and invoice.pdf and summarize" → find_file, read_pdf, find_file, read_pdf, compare_summarize
 
 12. WEB tasks in browser — prefer web_browse over computer_use when possible.
 
@@ -242,6 +247,10 @@ def _extract_youtube_query(transcript: str) -> str | None:
         query = match.group(1).strip()
         query = re.sub(r"\s+(song|video|music)$", "", query, flags=re.I)
         query = re.sub(r"^the\s+", "", query, flags=re.I)
+        query = re.sub(r"\s+and\s+post\s+a\s+.+?\s+comment.*$", "", query, flags=re.I)
+        query = re.sub(r"\s+and\s+post\s+.+?\s+comment.*$", "", query, flags=re.I)
+        query = re.sub(r"\s+and\s+post\s+(?:a\s+)?comment.*$", "", query, flags=re.I)
+        query = re.sub(r"\s+and\s+comment.*$", "", query, flags=re.I)
         query = re.sub(r"\s+and\s+play(\s+it)?$", "", query, flags=re.I)
         query = re.sub(r"\s+and$", "", query, flags=re.I)
         query = re.sub(r"\s+on\s+chrome$", "", query, flags=re.I)
@@ -357,6 +366,268 @@ def _wants_recent_mail(transcript: str) -> bool:
     )
 
 
+def _wants_compare(transcript: str) -> bool:
+    lower = transcript.lower()
+    if any(
+        k in lower
+        for k in ("compare", "comparison", "difference", "differences", " versus ", " vs ")
+    ):
+        return True
+    # Whisper often hears "compare" as "compile/compiled"
+    if re.search(r"\bcompil(?:e|ed|ing)\b", lower):
+        return True
+    return False
+
+
+def _wants_compare_summary(transcript: str) -> bool:
+    lower = transcript.lower()
+    if any(k in lower for k in ("summar", "summary", "summarise", "overview")):
+        return True
+    if _wants_compare(transcript) and any(k in lower for k in ("pdf", "pdfs", "document")):
+        return True
+    return False
+
+
+def _compare_search_directory(transcript: str) -> str | None:
+    lower = transcript.lower()
+    if "download" in lower:
+        return os.path.join(HOME, "Downloads")
+    if "desktop" in lower:
+        return os.path.join(HOME, "Desktop")
+    if "documents" in lower:
+        return os.path.join(HOME, "Documents")
+    return None
+
+
+def _clean_document_name(name: str) -> str:
+    name = re.sub(r"\s+which\b.*$", "", name, flags=re.I)
+    name = re.sub(r"\s+in\s+(?:the\s+)?(?:download|downloads|desktop|documents).*$", "", name, flags=re.I)
+    name = re.sub(r"\s+(?:and\s+)?summarize\b.*$", "", name, flags=re.I)
+    name = re.sub(r"\s+(?:and\s+)?summarise\b.*$", "", name, flags=re.I)
+    name = re.sub(r"\s+it\.?$", "", name, flags=re.I)
+    name = re.sub(r"\s+(?:two\s+)?(?:pdf|pdfs|document)s?\s*$", "", name, flags=re.I)
+    name = re.sub(r"\s+so\b.*$", "", name, flags=re.I)
+    name = re.sub(r"\s+that\b.*$", "", name, flags=re.I)
+    name = re.sub(r"'s$", "", name, flags=re.I)
+    if re.fullmatch(r"[a-z]+s", name.strip(), re.I) and len(name.strip()) > 4:
+        name = name.strip()[:-1]
+    return name.strip(" .,\"'")
+
+
+def _is_garbage_compare_name(name: str) -> bool:
+    n = name.lower().strip()
+    if len(n) < 2:
+        return True
+    if n in ("comparison", "compare", "as well", "well", "summarize", "download", "downloads"):
+        return True
+    if "as well" in n or n.startswith("comparison"):
+        return True
+    return False
+
+
+def _extract_compare_document_names(transcript: str) -> list[str]:
+    """Extract two document titles when user says 'compare X and Y' (PDF context)."""
+    lower = transcript.lower()
+    if not any(k in lower for k in ("pdf", "pdfs", "document", "resume")):
+        return []
+
+    compare_prefix = r"(?:compare|comparison|compil(?:e|ed|ing)|compared|comparing)"
+    patterns = [
+        rf"{compare_prefix}\s+(?:as\s+well\s+)?(.+?)\s+pdf\s+and\s+(.+?)\s+(?:resume\s+)?pdf",
+        rf"{compare_prefix}\s+(.+?)\s+and\s+(.+)",
+        rf"{compare_prefix}\s+(.+?)\s+with\s+(.+)",
+        rf"{compare_prefix}\s+(.+?)\s+versus\s+(.+)",
+        r"(.+?)\s+and\s+(.+?)\s+(?:pdf|pdfs|resume)\b",
+        r"\band\s+(.+?)\s+resume\s+pdf",
+    ]
+    for pat in patterns:
+        m = re.search(pat, transcript, re.I)
+        if not m:
+            continue
+        if m.lastindex == 1:
+            b = _clean_document_name(m.group(1))
+            return ["", b] if len(b) >= 2 and not _is_garbage_compare_name(b) else []
+        a = _clean_document_name(m.group(1))
+        b = _clean_document_name(m.group(2))
+        if _is_garbage_compare_name(a):
+            a = ""
+        if _is_garbage_compare_name(b):
+            continue
+        if len(b) >= 2 and (len(a) >= 2 or a == ""):
+            return [a, b]
+    return []
+
+
+def _resolve_compare_pdf_names(transcript: str) -> list[str]:
+    """PDF filenames or spoken document titles for compare."""
+    pdfs = _extract_pdf_names(transcript)
+    if len(pdfs) >= 2:
+        return pdfs[:2]
+    spoken = _extract_compare_document_names(transcript)
+    if len(spoken) >= 2:
+        return spoken[:2]
+    if any(k in transcript.lower() for k in ("pdf", "pdfs", "document", "resume")):
+        if len(spoken) == 1:
+            return spoken
+    return pdfs
+
+
+def _extract_pdf_names(transcript: str) -> list[str]:
+    """Find distinct PDF filenames mentioned in the transcript."""
+    names: list[str] = []
+    for m in re.finditer(r"([\w.-]+)\.(pdf|pd)\b", transcript, re.I):
+        base = m.group(1).strip()
+        name = f"{base}.pdf"
+        if name not in names and len(name) >= 5:
+            names.append(name)
+    return names
+
+
+def _extract_compare_second_source(transcript: str) -> tuple[str, str] | None:
+    """Return (kind, name) for the non-mail source. kind is 'pdf' or 'file'."""
+    pdfs = _extract_pdf_names(transcript)
+    if len(pdfs) == 1:
+        return "pdf", pdfs[0]
+
+    lower = transcript.lower()
+    patterns = [
+        r"(?:mail|email|gmail|inbox).*?(?:and|with|to)\s+(?:the\s+)?([\w.-]+?)(?:\s+pdf\b|\s+on\b|$)",
+        r"(?:compare|with|and|to)\s+(?:the\s+)?([\w.-]+?)\s+pdf\b",
+        r"pdf\s+(?:named|called|file)?\s*['\"]?([\w.-]+)['\"]?",
+    ]
+    for pat in patterns:
+        m = re.search(pat, lower, re.I)
+        if m:
+            name = m.group(1).strip(" .")
+            if len(name) >= 2:
+                return "pdf", name if name.lower().endswith(".pdf") else f"{name}.pdf"
+    if "pdf" in lower or "document" in lower:
+        return "pdf", ""
+    return None
+
+
+def _pdf_search_name(filename: str) -> str:
+    base = filename[:-4] if filename.lower().endswith(".pdf") else filename
+    base = re.sub(r"'s$", "", base.strip(), flags=re.I)
+    if re.fullmatch(r"[a-z]+s", base, re.I) and len(base) > 4:
+        base = base[:-1]
+    return base.strip(" .,\"'")
+
+
+def _try_compare_pdfs_plan(transcript: str) -> dict | None:
+    """Compare two PDFs and summarize differences."""
+    lower = transcript.lower()
+    if not _wants_compare(transcript):
+        return None
+    if not _wants_compare_summary(transcript):
+        return None
+
+    pdfs = _resolve_compare_pdf_names(transcript)
+    if len(pdfs) < 2:
+        return None
+
+    has_mail = any(k in lower for k in ("mail", "email", "gmail", "inbox"))
+    if has_mail and len(_extract_pdf_names(transcript)) == 1:
+        return None
+
+    pdf_a, pdf_b = pdfs[0], pdfs[1]
+    if _is_garbage_compare_name(pdf_a):
+        pdf_a = ""
+    if _is_garbage_compare_name(pdf_b):
+        return None
+    search_dir = _compare_search_directory(transcript)
+    pair_args = {
+        "name_a": _pdf_search_name(pdf_a) if pdf_a else "",
+        "name_b": _pdf_search_name(pdf_b),
+        "hint_text": transcript,
+    }
+    if search_dir:
+        pair_args["directory"] = search_dir
+
+    steps: list[dict] = [
+        {"tool": "find_compare_pdf_pair", "args": pair_args},
+        {"tool": "read_pdf", "args": {"path": "{{step_1_result.path_a}}"}},
+        {"tool": "read_pdf", "args": {"path": "{{step_1_result.path_b}}"}},
+        {
+            "tool": "compare_summarize",
+            "args": {
+                "text_a": "{{step_2_result.text}}",
+                "text_b": "{{step_3_result.text}}",
+                "label_a": "{{step_1_result.label_a}}",
+                "label_b": "{{step_1_result.label_b}}",
+                "style": "bullets",
+            },
+        },
+    ]
+
+    where = " in Downloads" if search_dir and "Download" in search_dir else ""
+    return validate_plan({
+        "intent": "compare_pdfs",
+        "explanation": f"Comparing '{pdf_a}' with '{pdf_b}'{where} and summarizing.",
+        "steps": steps,
+        "clarification_needed": False,
+        "clarification_question": None,
+    })
+
+
+def _try_compare_summary_plan(transcript: str) -> dict | None:
+    """Compare mail (Gmail) with a PDF/document, then summarize differences."""
+    lower = transcript.lower()
+    if not _wants_compare(transcript):
+        return None
+    if not _wants_compare_summary(transcript):
+        return None
+
+    if len(_resolve_compare_pdf_names(transcript)) >= 2:
+        return None
+
+    has_mail = any(k in lower for k in ("mail", "email", "gmail", "inbox"))
+    second = _extract_compare_second_source(transcript)
+    if not has_mail or not second:
+        return None
+
+    _kind, doc_name = second
+    if not doc_name:
+        return validate_plan({
+            "intent": "compare_summary",
+            "explanation": "Need a document name to compare with mail.",
+            "steps": [],
+            "clarification_needed": True,
+            "clarification_question": (
+                "Which PDF should I compare with your mail? "
+                "Try: 'Compare my mail with report.pdf and summarize.'"
+            ),
+        })
+
+    read_count = _mail_read_count(transcript, True, True)
+    search_name = _pdf_search_name(doc_name)
+
+    steps: list[dict] = [
+        {"tool": "open_gmail", "args": {"browser": "chrome", "recent": True}},
+        {"tool": "read_gmail", "args": {"limit": read_count, "wait": 8, "browser": "chrome"}},
+        {"tool": "find_file", "args": {"name": search_name}},
+        {"tool": "read_pdf", "args": {"path": "{{step_3_result.path}}"}},
+        {
+            "tool": "compare_summarize",
+            "args": {
+                "text_a": "{{step_2_result.body}}",
+                "text_b": "{{step_4_result.text}}",
+                "label_a": "Gmail inbox",
+                "label_b": doc_name,
+                "style": "bullets",
+            },
+        },
+    ]
+
+    return validate_plan({
+        "intent": "compare_summary",
+        "explanation": f"Comparing Gmail with '{doc_name}' and summarizing.",
+        "steps": steps,
+        "clarification_needed": False,
+        "clarification_question": None,
+    })
+
+
 MAIL_BATCH_SIZE = 5
 
 
@@ -374,6 +645,8 @@ def _mail_read_count(transcript: str, wants_summary: bool, recent: bool) -> int:
 def _try_mail_plan(transcript: str) -> dict | None:
     """Gmail in Chrome: open inbox → read → optional summarize/save."""
     lower = transcript.lower()
+    if _wants_compare(transcript):
+        return None
     if not any(k in lower for k in ("mail", "email", "inbox", "gmail")):
         return None
     if not any(k in lower for k in ("search", "find", "read", "open", "summar", "summary", "ticket", "task")):
@@ -498,30 +771,46 @@ def _try_summarize_codebase_plan(transcript: str) -> dict | None:
         "clarification_question": None,
     })
 
+_PLACEHOLDER = re.compile(r"\{\{step_(\d+)_result\.(\w+)\}\}")
+
+
 def _resolve_placeholders(args: dict, step_results: list[dict]) -> dict:
     """
     Replace {{step_N_result.field}} placeholders with actual values
     from previous step results. Enables chaining.
     """
-    args_str = json.dumps(args)
-    changed  = False
+    out: dict = {}
+    changed = False
 
-    pattern = re.compile(r'\{\{step_(\d+)_result\.(\w+)\}\}')
-    for match in pattern.finditer(args_str):
-        step_idx = int(match.group(1)) - 1  # 1-indexed in prompt, 0-indexed here
-        field    = match.group(2)
-        if 0 <= step_idx < len(step_results):
-            value = step_results[step_idx].get(field, "")
-            if value:
-                args_str = args_str.replace(match.group(0), str(value))
-                changed = True
+    for key, val in args.items():
+        if not isinstance(val, str) or not _PLACEHOLDER.search(val):
+            out[key] = val
+            continue
 
-    return json.loads(args_str) if changed else args
+        def _replace(match: re.Match) -> str:
+            step_idx = int(match.group(1)) - 1
+            field = match.group(2)
+            if 0 <= step_idx < len(step_results):
+                value = step_results[step_idx].get(field, "")
+                if value not in (None, ""):
+                    return str(value)
+            return match.group(0)
+
+        resolved = _PLACEHOLDER.sub(_replace, val)
+        if resolved != val:
+            changed = True
+        out[key] = resolved
+
+    return out if changed else args
 
 
 def _normalize_transcript(transcript: str) -> str:
     """Fix common speech-to-text typos before routing."""
     text = transcript
+    text = re.sub(r"\.pd\b", ".pdf", text, flags=re.I)
+    text = re.sub(r"\bcompare_and_summarize\b", "compare summarize", text, flags=re.I)
+    text = re.sub(r"\bcompil(?:e|ed|ing)\b", "compare", text, flags=re.I)
+    text = re.sub(r"\bjaishwal\b", "jaiswal", text, flags=re.I)
     text = re.sub(r"\bsearch\s+yutofor\b", "search youtube for", text, flags=re.I)
     text = re.sub(r"\bsearch\s+youtub\b", "search youtube for", text, flags=re.I)
     replacements = (
@@ -558,12 +847,38 @@ def plan(transcript: str, previous_context: str = "") -> dict:
                  codebase_plan.get("explanation"))
         return codebase_plan
 
+    compare_pdfs_plan = _try_compare_pdfs_plan(transcript)
+    if compare_pdfs_plan:
+        log.info("Plan: [%s] %d steps — %s (deterministic)",
+                 compare_pdfs_plan.get("intent"), len(compare_pdfs_plan.get("steps", [])),
+                 compare_pdfs_plan.get("explanation"))
+        return compare_pdfs_plan
+
+    compare_plan = _try_compare_summary_plan(transcript)
+    if compare_plan:
+        log.info("Plan: [%s] %d steps — %s (deterministic)",
+                 compare_plan.get("intent"), len(compare_plan.get("steps", [])),
+                 compare_plan.get("explanation"))
+        return compare_plan
+
     mail_plan = _try_mail_plan(transcript)
     if mail_plan:
         log.info("Plan: [%s] %d steps — %s (deterministic)",
                  mail_plan.get("intent"), len(mail_plan.get("steps", [])),
                  mail_plan.get("explanation"))
         return mail_plan
+
+    if _wants_compare(transcript) and _wants_compare_summary(transcript):
+        return validate_plan({
+            "intent": "compare_clarify",
+            "explanation": "Need clearer PDF names for compare.",
+            "steps": [],
+            "clarification_needed": True,
+            "clarification_question": (
+                "Name both PDFs clearly. Example: "
+                "'Compare Shivam Jaiswar Raju.pdf and Jaya Rai Raju.pdf in Downloads and summarize.'"
+            ),
+        })
 
     system_prompt = _build_system_prompt()
 
@@ -627,7 +942,21 @@ def replan(transcript: str, context: str) -> dict:
                 "or grant Accessibility permission for Terminal/Python (for clipboard fallback)."
             ),
         })
-    return plan(_normalize_transcript(transcript), previous_context=context)
+    norm = _normalize_transcript(transcript)
+    if _wants_compare(norm) and (
+        "find_file" in context or "find_compare_pdf_pair" in context
+    ) and ("No file found" in context or "No PDF" in context):
+        return validate_plan({
+            "intent": "compare_find_failed",
+            "explanation": "Could not find one or both PDFs.",
+            "steps": [],
+            "clarification_needed": True,
+            "clarification_question": (
+                "I could not find those PDFs in Downloads. Check the names, or say something like "
+                "'Compare Shivam and Jaya PDFs in Downloads and summarize.'"
+            ),
+        })
+    return plan(norm, previous_context=context)
 
 
 def resolve_step_args(args: dict, step_results: list[dict]) -> dict:

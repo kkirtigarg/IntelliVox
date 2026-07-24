@@ -104,6 +104,55 @@ def summarize(text: str, style: str = "concise") -> dict:
         return {"success": False, "message": f"Summarization failed: {e}"}
 
 
+@track(name="compare_summarize", project_name="intellivox", tags=["llm"])
+def compare_summarize(
+    text_a: str,
+    text_b: str,
+    label_a: str = "Source A",
+    label_b: str = "Source B",
+    style: str = "bullets",
+) -> dict:
+    """
+    Compare two text sources and produce a combined summary.
+    Returns: { success, summary, label_a, label_b }
+    """
+    a = (text_a or "").strip()
+    b = (text_b or "").strip()
+    if not a or not b:
+        return {"success": False, "message": "Both sources are required for comparison."}
+
+    per_source = MAX_CHARS // 2 - 200
+    style_prompts = {
+        "concise": "Write 4-6 sentences comparing the two sources.",
+        "detailed": "Write a detailed comparison with sections for each source and a comparison section.",
+        "bullets": "Use bullet points with sections: Similarities, Differences, Key points from each source, Action items.",
+    }
+    instruction = style_prompts.get(style, style_prompts["bullets"])
+    prompt = (
+        f"{instruction}\n\n"
+        "Compare these two sources. Note overlaps, contradictions, and unique points.\n\n"
+        f"=== {label_a} ===\n{a[:per_source]}\n\n"
+        f"=== {label_b} ===\n{b[:per_source]}"
+    )
+
+    try:
+        import ollama
+        response = ollama.chat(
+            model="llama3.1",
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.3},
+        )
+        summary = response["message"]["content"].strip()
+        return {
+            "success": True,
+            "summary": summary,
+            "label_a": label_a,
+            "label_b": label_b,
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Comparison failed: {e}"}
+
+
 @track(name="summarize_codebase", project_name="intellivox", tags=["llm"])
 def summarize_codebase(directory: str = "", style: str = "bullets", path: str = "") -> dict:
     """

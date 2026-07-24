@@ -241,6 +241,7 @@ class AgentSession:
         step_results: list[dict] = []
         step_idx     = 0
         replans      = 0
+        last_rich_result: dict | None = None
 
         while step_idx < len(steps):
             if self._cancelled:
@@ -265,6 +266,26 @@ class AgentSession:
                     log.warning("[%s] skipping summarize — no mail body", self.session_id)
                     step_idx += 1
                     continue
+
+            if tool == "compare_summarize":
+                if not str(args.get("text_a") or "").strip() or not str(args.get("text_b") or "").strip():
+                    err_msg = "Nothing to compare — one or both sources were not read."
+                    await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                    log.warning("[%s] skipping compare_summarize — missing sources", self.session_id)
+                    step_idx += 1
+                    continue
+                if "{{step_" in str(args.get("text_a", "")) or "{{step_" in str(args.get("text_b", "")):
+                    err_msg = "Comparison sources were not loaded."
+                    await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                    step_idx += 1
+                    continue
+
+            if tool == "read_pdf" and "{{step_" in str(args.get("path", "")):
+                err_msg = "PDF path not resolved — file search failed."
+                await self.send({"type": "step_failed", "step_index": step_idx, "text": err_msg})
+                log.warning("[%s] skipping read_pdf — unresolved path placeholder", self.session_id)
+                step_idx += 1
+                continue
 
             safety_result = safety.check(tool, args, source="voice")
             self.audit.log_safety(tool, args, safety_result.decision, safety_result.reason)
@@ -329,9 +350,59 @@ class AgentSession:
                         elif next_tool in ("open_file", "read_pdf", "read_file"):
                             ns["args"]["path"] = found_path
 
+                elif tool == "find_compare_pdf_pair" and result.get("success"):
+                    label_a = result.get("label_a", "PDF 1")
+                    label_b = result.get("label_b", "PDF 2")
+                    done_msg = f"Matched {label_a} and {label_b}"
+
+                    if result.get("needs_confirm"):
+                        confirm_msg = result.get(
+                            "message",
+                            f"Proceed with {label_a} and {label_b}?",
+                        )
+                        await self.send({
+                            "type":       "confirm",
+                            "text":       confirm_msg,
+                            "tool":       tool,
+                            "step_index": step_idx,
+                        })
+                        if result.get("fallback_match"):
+                            tts.speak(
+                                "I could not match exact names. I found two likely PDFs. Please confirm to compare."
+                            )
+                        else:
+                            tts.speak(
+                                "I found two PDFs with partial name matches. Please confirm to compare."
+                            )
+                        self.audit.log_confirmation(tool, "waiting")
+                        approved = await self.wait_for_confirmation()
+                        self.audit.log_confirmation(tool, "yes" if approved else "no")
+                        if not approved:
+                            await self.send({"type": "info", "text": "Comparison cancelled."})
+                            tts.speak("Okay, cancelled.")
+                            break
+
+                    read_paths = [result["path_a"], result["path_b"]]
+                    read_i = 0
+                    for ns in steps[step_idx + 1:]:
+                        nt = ns.get("tool")
+                        if nt == "read_pdf":
+                            ns["args"]["path"] = read_paths[read_i]
+                            read_i += 1
+                        elif nt == "compare_summarize":
+                            ns["args"]["label_a"] = label_a
+                            ns["args"]["label_b"] = label_b
+                            break
+
                 elif tool == "read_pdf" and result.get("text"):
                     chars = len(result["text"])
                     done_msg = f"Read {result.get('page_count', '?')} pages ({chars:,} chars)"
+                    _feed_compare_source(
+                        steps,
+                        step_idx,
+                        result["text"],
+                        os.path.basename(result.get("path", "PDF")),
+                    )
                     if step_idx + 1 < len(steps):
                         ns = steps[step_idx + 1]
                         if ns.get("tool") in ("summarize", "answer_question"):
@@ -348,6 +419,7 @@ class AgentSession:
                         done_msg = f"Read {n_read} emails"
                     else:
                         done_msg = f"Read mail: {result.get('subject', '')[:60]}"
+                    _feed_compare_source(steps, step_idx, result["body"], "Gmail inbox")
                     if step_idx + 1 < len(steps):
                         ns = steps[step_idx + 1]
                         if ns.get("tool") in ("summarize", "answer_question"):
@@ -363,12 +435,20 @@ class AgentSession:
                         if ns.get("tool") in ("summarize", "answer_question"):
                             ns["args"]["text"] = result["text"]
 
-                elif tool in ("summarize", "summarize_codebase") and result.get("summary"):
+                elif tool in ("summarize", "summarize_codebase", "compare_summarize") and result.get("summary"):
                     if tool == "summarize_codebase":
                         done_msg = f"Summarized {result.get('files_read', '?')} files"
+                    elif tool == "compare_summarize":
+                        done_msg = f"Compared {result.get('label_a', 'A')} vs {result.get('label_b', 'B')}"
                     else:
                         done_msg = "Summary complete"
-                    await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
+                    title = "Comparison" if tool == "compare_summarize" else "Summary"
+                    last_rich_result = {"label": title, "text": result["summary"]}
+                    await self.send({
+                        "type":  "rich_result",
+                        "label": title,
+                        "text":  result["summary"],
+                    })
                     short = result["summary"][:220].replace("\n", " ").strip()
                     tts.speak(short)
                     if step_idx + 1 < len(steps):
@@ -390,7 +470,18 @@ class AgentSession:
                     tts.speak(short)
 
                 if result.get("success") and verified:
-                    await self.send({"type": "step_done", "step_index": step_idx, "verified": True, "text": done_msg})
+                    step_done_msg: dict = {
+                        "type":       "step_done",
+                        "step_index": step_idx,
+                        "verified":   True,
+                        "text":       done_msg,
+                    }
+                    if last_rich_result and tool in (
+                        "summarize", "summarize_codebase", "compare_summarize",
+                    ):
+                        step_done_msg["summary"] = last_rich_result["text"]
+                        step_done_msg["summary_label"] = last_rich_result["label"]
+                    await self.send(step_done_msg)
                     log.info("[%s] step %d done: %s", self.session_id, step_idx, done_msg)
                     completed += 1
                     step_idx += 1
@@ -404,12 +495,20 @@ class AgentSession:
             if tool == "read_gmail":
                 while step_idx + 1 < len(steps):
                     nxt = steps[step_idx + 1].get("tool")
-                    if nxt in ("summarize", "save_summary_file", "read_gmail", "open_gmail"):
+                    if nxt in ("summarize", "save_summary_file", "read_gmail", "open_gmail", "compare_summarize"):
                         steps.pop(step_idx + 1)
                     else:
                         break
                 step_idx += 1
                 continue
+
+            if tool == "find_compare_pdf_pair":
+                while step_idx + 1 < len(steps):
+                    nxt = steps[step_idx + 1].get("tool")
+                    if nxt in ("read_pdf", "compare_summarize"):
+                        steps.pop(step_idx + 1)
+                    else:
+                        break
 
             if replans < MAX_REPLANS:
                 replans += 1
@@ -441,11 +540,30 @@ class AgentSession:
 
         # Done
         summary_msg = f"Done! Completed {completed} of {len(steps)} steps."
-        await self.send({"type": "done", "text": summary_msg})
+        done_payload: dict = {"type": "done", "text": summary_msg}
+        if last_rich_result:
+            done_payload["summary"] = last_rich_result["text"]
+            done_payload["summary_label"] = last_rich_result["label"]
+        await self.send(done_payload)
         if completed == len(steps):
             tts.speak("All done!")
         self.audit.log_outcome("success" if completed == len(steps) else "partial", summary_msg)
         log.info("[%s] Task complete: %s", self.session_id, summary_msg)
+
+
+def _feed_compare_source(steps: list, from_idx: int, text: str, label: str) -> None:
+    """Inject read content into the next compare_summarize step."""
+    for step in steps[from_idx + 1:]:
+        if step.get("tool") != "compare_summarize":
+            continue
+        args = step.setdefault("args", {})
+        if not args.get("text_a"):
+            args["text_a"] = text
+            args["label_a"] = label
+        elif not args.get("text_b"):
+            args["text_b"] = text
+            args["label_b"] = label
+        return
 
 
 def _describe_step(tool: str, args: dict) -> str:
@@ -461,6 +579,9 @@ def _describe_step(tool: str, args: dict) -> str:
         "press_key":      lambda a: f"Pressing {a.get('key', '')}…",
         "take_screenshot":lambda a: "Taking a screenshot…",
         "find_file":      lambda a: f"🔍 Searching for '{a.get('name', '')}'…",
+        "find_compare_pdf_pair": lambda a: (
+            f"🔍 Matching PDFs '{a.get('name_a', '')}' and '{a.get('name_b', '')}'…"
+        ),
         "list_files":     lambda a: f"Listing files in {a.get('directory', '~')}…",
         "read_file":      lambda a: f"Reading {a.get('path', '')}…",
         "summarize_codebase": lambda a: f"Summarizing code in {a.get('directory', '')}…",
@@ -470,6 +591,9 @@ def _describe_step(tool: str, args: dict) -> str:
             + (f" (search: {a.get('query', '')})" if a.get("query") else "…")
         ),
         "read_gmail":     lambda a: f"Reading top {a.get('limit', 5)} Gmail messages…",
+        "compare_summarize": lambda a: (
+            f"Comparing {a.get('label_a', 'source A')} and {a.get('label_b', 'source B')}…"
+        ),
         "web_browse":     lambda a: f"Browsing web: {(a.get('goal') or a.get('url', ''))[:60]}…",
         "computer_use":   lambda a: f"Controlling computer: {a.get('goal', '')[:80]}…",
         "write_file":     lambda a: f"Writing to {a.get('path', '')}…",

@@ -90,10 +90,10 @@ def verify_step(tool: str, args: dict, result: dict) -> dict:
         url = args.get("url", "") or result.get("url", "")
         if "mail.google.com" in url or tool == "open_gmail":
             v = verify_url("mail.google.com")
+        elif "youtube.com" in url or tool == "youtube_play":
+            v = verify_url("youtube.com")
         elif "google.com" in url:
             v = verify_url("google.com")
-        elif "youtube.com" in url:
-            v = verify_url("youtube.com")
         else:
             fragment = url.split("/")[2] if "/" in url else url[:20]
             v = verify_url(fragment)
