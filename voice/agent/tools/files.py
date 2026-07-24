@@ -249,6 +249,121 @@ def _edit_excel(path: str, old_text: str, new_text: str) -> dict:
         return {"success": False, "message": str(e)}
 
 
+# ── File type groups for organize_files ────────────────────────────────────────
+_TYPE_GROUPS: dict[str, set[str]] = {
+    "Images":        {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".heic", ".svg", ".ico"},
+    "Videos":        {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".m4v", ".webm"},
+    "Audio":         {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma"},
+    "Documents":     {".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".pages", ".md"},
+    "Spreadsheets":  {".xls", ".xlsx", ".csv", ".numbers", ".ods"},
+    "Presentations": {".ppt", ".pptx", ".key", ".odp"},
+    "Archives":      {".zip", ".tar", ".gz", ".rar", ".7z", ".bz2", ".dmg", ".pkg", ".iso"},
+    "Code":          {".py", ".js", ".ts", ".html", ".css", ".java", ".cpp", ".c", ".h",
+                      ".go", ".rs", ".swift", ".rb", ".sh", ".json", ".xml", ".yaml", ".yml"},
+}
+
+
+def organize_files(directory: str, by: str = "type", rules: list = None) -> dict:
+    """
+    Organize files in a directory by moving them into subfolders.
+
+    by="type"   — auto-groups by extension into Images / Videos / Documents / etc.
+    by="custom" — uses explicit rules list. Each rule:
+                    { "destination": "FolderName",
+                      "extensions":    [".pdf", ".docx"],   # optional
+                      "name_contains": "invoice" }          # optional
+                  A file matches if ANY of the specified conditions is true.
+
+    Returns: { success, moved, skipped, folders_created, details, directory }
+    """
+    expanded = str(Path(directory).expanduser())
+    if not os.path.isdir(expanded):
+        return {"success": False, "message": f"Not a directory: {directory}"}
+    if not _is_safe_path(expanded):
+        return {"success": False, "message": "Access denied: outside allowed directories"}
+
+    try:
+        entries = [
+            e for e in Path(expanded).iterdir()
+            if e.is_file() and not e.name.startswith(".")
+        ]
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+    if by == "type":
+        move_plan = _plan_by_type(entries)
+    elif by == "custom":
+        if not rules:
+            return {"success": False, "message": "custom mode requires a rules list"}
+        move_plan = _plan_by_rules(entries, rules)
+    else:
+        return {"success": False, "message": f"Unknown strategy: {by!r}. Use 'type' or 'custom'"}
+
+    moved, skipped, folders_created, details = 0, 0, [], []
+    for src, folder_name in move_plan:
+        dest_dir = Path(expanded) / folder_name
+        if not dest_dir.exists():
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            folders_created.append(folder_name)
+        dest = dest_dir / src.name
+        if dest.exists():
+            skipped += 1
+            continue
+        try:
+            shutil.move(str(src), str(dest))
+            details.append(f"{src.name} → {folder_name}/")
+            moved += 1
+        except Exception as e:
+            skipped += 1
+
+    return {
+        "success": True,
+        "moved": moved,
+        "skipped": skipped,
+        "folders_created": folders_created,
+        "details": details,
+        "directory": expanded,
+        "message": (
+            f"Moved {moved} file(s) into {len(set(f for _, f in move_plan))} folder(s)"
+            + (f", skipped {skipped}" if skipped else "")
+        ),
+    }
+
+
+def _plan_by_type(entries: list) -> list[tuple]:
+    """Return [(Path, folder_name), ...] grouped by file type."""
+    ext_to_group = {}
+    for group, exts in _TYPE_GROUPS.items():
+        for ext in exts:
+            ext_to_group[ext] = group
+
+    plan = []
+    for f in entries:
+        group = ext_to_group.get(f.suffix.lower(), "Other")
+        plan.append((f, group))
+    return plan
+
+
+def _plan_by_rules(entries: list, rules: list) -> list[tuple]:
+    """Return [(Path, folder_name), ...] matched against user-defined rules."""
+    plan = []
+    for f in entries:
+        ext = f.suffix.lower()
+        name_lower = f.name.lower()
+        matched = False
+        for rule in rules:
+            dest = rule.get("destination", "Other")
+            rule_exts = {e.lower() for e in rule.get("extensions", [])}
+            name_kw   = rule.get("name_contains", "").lower()
+            if (rule_exts and ext in rule_exts) or (name_kw and name_kw in name_lower):
+                plan.append((f, dest))
+                matched = True
+                break
+        if not matched:
+            plan.append((f, "Other"))
+    return plan
+
+
 def open_file(path: str) -> dict:
     """Open a file with its default application."""
     import subprocess

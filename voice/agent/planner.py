@@ -76,6 +76,9 @@ CRITICAL RULES
 1. NEVER guess file paths. If you need to open/find a file and don't know
    the exact full path, ALWAYS use find_file first, then use the path from
    its result in the next step (open_file).
+   CRITICAL: find_file returns a FULL absolute path like /Users/kirtigarg/Desktop/test_folder.
+   NEVER prepend ~/Desktop/ or any prefix to a {{step_N_result.path}} placeholder.
+   Use it exactly as-is: path={{{{step_1_result.path}}}} NOT path="~/Desktop/{{{{step_1_result.path}}}}".
 
 2. macOS app names only:
    - "notepad"    → "TextEdit"
@@ -135,6 +138,17 @@ FILES:
                                  ALWAYS use this instead of write_file when editing existing content.
   delete_file(path: str)       ← DESTRUCTIVE, needs confirmation
   move_file(src: str, dst: str)
+  organize_files(directory: str, by: str = "type", rules: list = null)
+                               ← organizes files in a folder into subfolders.
+                                 by="type"   — auto-groups by extension:
+                                   Images (.jpg .png .heic …), Videos (.mp4 .mov …),
+                                   Audio (.mp3 .wav …), Documents (.pdf .doc .txt …),
+                                   Spreadsheets (.xlsx .csv …), Presentations (.pptx .key …),
+                                   Archives (.zip .dmg …), Code (.py .js …), Other
+                                 by="custom" — use rules list:
+                                   [{{"destination":"Reports","extensions":[".pdf",".docx"]}},
+                                    {{"destination":"Finance","name_contains":"invoice"}}]
+                                 A file matching no rule goes to "Other".
 
 SPREADSHEETS (Excel .xlsx / CSV — cell-level, never overwrites the whole file):
   read_spreadsheet(path: str, sheet: str = null)
@@ -223,6 +237,31 @@ CHAINING EXAMPLES
   Step 1: find_file(name="budget.xlsx")
   Step 2: read_spreadsheet(path={{step_1_result.path}})
   Step 3: edit_file(path={{step_1_result.path}}, old_text="<current price value>", new_text="<new price>")
+
+"organise my desktop" / "clean up my desktop":
+  Step 1: organize_files(directory="~/Desktop", by="type")
+
+"organise my downloads":
+  Step 1: organize_files(directory="~/Downloads", by="type")
+
+"organise my test folder" / "organise a specific folder by name":
+  Step 1: find_file(name="test_folder")
+  Step 2: organize_files(directory={{step_1_result.path}}, by="type")
+  ← use {{step_1_result.path}} directly, NEVER "~/Desktop/{{step_1_result.path}}"
+
+"move all PDFs on my desktop to a Reports folder":
+  Step 1: organize_files(directory="~/Desktop", by="custom",
+            rules=[{{"destination":"Reports","extensions":[".pdf"]}}])
+
+"put invoices and budgets into a Finance folder on my desktop":
+  Step 1: organize_files(directory="~/Desktop", by="custom",
+            rules=[{{"destination":"Finance","name_contains":"invoice"}},
+                   {{"destination":"Finance","name_contains":"budget"}}])
+
+"sort images and videos on desktop into separate folders":
+  Step 1: organize_files(directory="~/Desktop", by="custom",
+            rules=[{{"destination":"Images","extensions":[".jpg",".jpeg",".png",".heic",".gif",".webp"]}},
+                   {{"destination":"Videos","extensions":[".mp4",".mov",".avi",".mkv"]}}])
 
 "search YouTube for a song and play it":
   Step 1: computer_use(goal="Open Chrome, search YouTube for <song name>, click the first video, and play it")
