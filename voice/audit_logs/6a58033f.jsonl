@@ -1,0 +1,50 @@
+{"type": "transcript", "text": "Open notepad.", "language": "en", "ts": "2026-07-24T10:28:08.774711+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening Notepad application.", "steps": [{"tool": "open_app", "args": {"name": "notepad"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:28:12.849101+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "notepad"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:28:12.849884+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "notepad"}, "result": {"success": false, "message": "Could not open 'notepad': 30:38: execution error: Can\u2019t get application \"notepad\". (-1728)"}, "verified": false, "ts": "2026-07-24T10:28:12.986485+00:00"}
+{"type": "error", "message": "Could not open 'notepad': 30:38: execution error: Can\u2019t get application \"notepad\". (-1728)", "ts": "2026-07-24T10:28:12.987029+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T10:28:12.987257+00:00"}
+{"type": "transcript", "text": "Open Notes", "language": "en", "ts": "2026-07-24T10:28:29.143083+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the Notes app on your computer.", "steps": [{"tool": "open_app", "args": {"name": "Notes"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:28:33.352043+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Notes"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:28:33.352428+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Notes"}, "result": {"success": true, "message": "Opened Notes"}, "verified": true, "ts": "2026-07-24T10:28:35.715247+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T10:28:35.715979+00:00"}
+{"type": "transcript", "text": "Open Finder and open the Talent Hack PDF.", "language": "en", "ts": "2026-07-24T10:29:19.463669+00:00"}
+{"type": "plan", "plan": {"intent": "open_app_and_open_file", "explanation": "Opening Finder and opening a file named 'Talent Hack PDF'", "steps": [{"tool": "open_app", "args": {"name": "Finder"}}, {"tool": "list_files", "args": {"directory": "/Users/username/Documents"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:29:25.380854+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Finder"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:29:25.381694+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Finder"}, "result": {"success": true, "message": "Opened Finder"}, "verified": true, "ts": "2026-07-24T10:29:27.073463+00:00"}
+{"type": "safety", "tool": "list_files", "args": {"directory": "/Users/username/Documents"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:29:27.074253+00:00"}
+{"type": "action", "tool": "list_files", "args": {"directory": "/Users/username/Documents"}, "result": {"success": false, "message": "Not a directory: /Users/username/Documents"}, "verified": false, "ts": "2026-07-24T10:29:27.074859+00:00"}
+{"type": "error", "message": "Not a directory: /Users/username/Documents", "ts": "2026-07-24T10:29:27.075018+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 1 of 2 steps.", "ts": "2026-07-24T10:29:27.075296+00:00"}
+{"type": "transcript", "text": "from finder open the talent hack pdf", "language": "en", "ts": "2026-07-24T10:32:06.172072+00:00"}
+{"type": "plan", "plan": {"intent": "open file", "explanation": "Open the PDF file named 'Talent Hack' from Finder.", "steps": [{"tool": "open_file", "args": {"path": "/Users/username/Documents/Talent Hack.pdf"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:32:10.983497+00:00"}
+{"type": "safety", "tool": "open_file", "args": {"path": "/Users/username/Documents/Talent Hack.pdf"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:32:10.984114+00:00"}
+{"type": "action", "tool": "open_file", "args": {"path": "/Users/username/Documents/Talent Hack.pdf"}, "result": {"success": false, "message": "File not found: /Users/username/Documents/Talent Hack.pdf"}, "verified": false, "ts": "2026-07-24T10:32:10.986724+00:00"}
+{"type": "error", "message": "File not found: /Users/username/Documents/Talent Hack.pdf", "ts": "2026-07-24T10:32:10.987282+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T10:32:10.987942+00:00"}
+{"type": "transcript", "text": "From finder go to downloads and open the talent hack pdf.", "language": "en", "ts": "2026-07-24T10:32:25.912619+00:00"}
+{"type": "plan", "plan": {"intent": "open_file", "explanation": "Open the 'Talent Hack PDF' file from the Downloads directory in Finder.", "steps": [{"tool": "open_app", "args": {"name": "Finder"}}, {"tool": "navigate_url", "args": {"url": "/Users/username/Downloads", "browser": "finder"}}, {"tool": "open_file", "args": {"path": "/Users/username/Downloads/Talent Hack PDF.pdf"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:32:33.861593+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Finder"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:32:33.862436+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Finder"}, "result": {"success": true, "message": "Opened Finder"}, "verified": true, "ts": "2026-07-24T10:32:35.535787+00:00"}
+{"type": "safety", "tool": "navigate_url", "args": {"url": "/Users/username/Downloads", "browser": "finder"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:32:35.536551+00:00"}
+{"type": "action", "tool": "navigate_url", "args": {"url": "/Users/username/Downloads", "browser": "finder"}, "result": {"success": true, "message": "Navigated to https:///Users/username/Downloads"}, "verified": true, "ts": "2026-07-24T10:32:36.446041+00:00"}
+{"type": "safety", "tool": "open_file", "args": {"path": "/Users/username/Downloads/Talent Hack PDF.pdf"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:32:36.446595+00:00"}
+{"type": "action", "tool": "open_file", "args": {"path": "/Users/username/Downloads/Talent Hack PDF.pdf"}, "result": {"success": false, "message": "File not found: /Users/username/Downloads/Talent Hack PDF.pdf"}, "verified": false, "ts": "2026-07-24T10:32:36.448043+00:00"}
+{"type": "error", "message": "File not found: /Users/username/Downloads/Talent Hack PDF.pdf", "ts": "2026-07-24T10:32:36.448168+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 2 of 3 steps.", "ts": "2026-07-24T10:32:36.448435+00:00"}
+{"type": "transcript", "text": "Open Numbers", "language": "en", "ts": "2026-07-24T10:34:20.489926+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the 'Numbers' application.", "steps": [{"tool": "open_app", "args": {"name": "Numbers"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:34:25.016170+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Numbers"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:34:25.016972+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Numbers"}, "result": {"success": true, "message": "Opened Numbers"}, "verified": true, "ts": "2026-07-24T10:34:28.655748+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T10:34:28.658067+00:00"}
+{"type": "transcript", "text": "\u0905\u092a\u0928 \u0917\u0941\u0917\u093e \u0932\u0947\u0928\u094d\u0938\u0947\u0930\u094d\u091a \u0913\u0928 \u092f\u0942\u091f\u0942\u092c\u0964", "language": "hi", "ts": "2026-07-24T10:34:52.053552+00:00"}
+{"type": "plan", "plan": {"intent": "search on YouTube", "explanation": "Perform a Google search for the query on YouTube.", "steps": [{"tool": "youtube_search", "args": {"query": "\u093e\u0928\u0947 \u0915\u093e\u0902\u0930\u093f\u093c\u093e"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:34:58.076512+00:00"}
+{"type": "safety", "tool": "youtube_search", "args": {"query": "\u093e\u0928\u0947 \u0915\u093e\u0902\u0930\u093f\u093c\u093e"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:34:58.077445+00:00"}
+{"type": "action", "tool": "youtube_search", "args": {"query": "\u093e\u0928\u0947 \u0915\u093e\u0902\u0930\u093f\u093c\u093e"}, "result": {"success": true, "message": "Navigated to https://www.youtube.com/results?search_query=%E0%A4%BE%E0%A4%A8%E0%A5%87+%E0%A4%95%E0%A4%BE%E0%A4%82%E0%A4%B0%E0%A4%BF%E0%A4%BC%E0%A4%BE"}, "verified": true, "ts": "2026-07-24T10:34:59.027557+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T10:34:59.028398+00:00"}
+{"type": "transcript", "text": "Open numbers from system", "language": "en", "ts": "2026-07-24T10:35:25.243982+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening Numbers app on the system.", "steps": [{"tool": "open_app", "args": {"name": "Numbers"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T10:35:29.320830+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Numbers"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T10:35:29.321447+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Numbers"}, "result": {"success": true, "message": "Opened Numbers"}, "verified": true, "ts": "2026-07-24T10:35:30.988997+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T10:35:30.990076+00:00"}
