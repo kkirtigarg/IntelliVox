@@ -24,23 +24,15 @@ function useAgentVoice() {
   const mediaRef   = useRef(null);
   const chunksRef  = useRef([]);
   const streamRef  = useRef(null);
+  const handleServerMessageRef = useRef(null);
 
-  /* ── WebSocket setup ── */
-  const connectWS = useCallback(() => {
-    if (wsRef.current?.readyState < 2) return;
-    const ws = new WebSocket(WS_URL);
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      handleServerMessage(msg);
-    };
-    ws.onerror = () => {
-      setErrorMsg(`Cannot connect to agent server (${WS_URL}). Is it running?`);
-      setPhase('error');
-    };
-    wsRef.current = ws;
+  const applyRichResult = useCallback((label, text) => {
+    if (!text || !String(text).trim()) return;
+    const kind = (label || '').toLowerCase().includes('compar') ? 'Comparison' : 'Summary';
+    setRichResult({ label: kind, text: String(text) });
   }, []);
 
-  const handleServerMessage = (msg) => {
+  handleServerMessageRef.current = (msg) => {
     switch (msg.type) {
       case 'transcribing':
         setPhase('transcribing');
@@ -75,6 +67,7 @@ function useAgentVoice() {
         setSteps(prev => prev.map((s, i) =>
           i === msg.step_index ? { ...s, status: 'done', displayText: msg.text } : s
         ));
+        if (msg.summary) applyRichResult(msg.summary_label, msg.summary);
         break;
 
       case 'step_failed':
@@ -101,13 +94,11 @@ function useAgentVoice() {
       case 'done':
         setPhase('done');
         setStatusText(msg.text);
+        if (msg.summary) applyRichResult(msg.summary_label, msg.summary);
         break;
 
       case 'rich_result':
-        // Only show summary panel for explicit summary requests
-        if (msg.label === 'Summary') {
-          setRichResult({ label: msg.label, text: msg.text });
-        }
+        if (msg.text) applyRichResult(msg.label, msg.text);
         break;
 
       case 'error':
@@ -125,6 +116,21 @@ function useAgentVoice() {
         break;
     }
   };
+
+  /* ── WebSocket setup ── */
+  const connectWS = useCallback(() => {
+    if (wsRef.current?.readyState < 2) return;
+    const ws = new WebSocket(WS_URL);
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      handleServerMessageRef.current?.(msg);
+    };
+    ws.onerror = () => {
+      setErrorMsg(`Cannot connect to agent server (${WS_URL}). Is it running?`);
+      setPhase('error');
+    };
+    wsRef.current = ws;
+  }, []);
 
   /* ── Send control message ── */
   const sendControl = useCallback((text) => {
@@ -284,7 +290,7 @@ export default function App() {
   const isError      = phase === 'error';
   const isClarify    = phase === 'clarify';
   const isConfirm    = phase === 'confirm';
-  const showSummary = richResult?.label === 'Summary';
+  const showSummary = richResult?.label === 'Summary' || richResult?.label === 'Comparison';
   const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify;
 
   return (
@@ -309,6 +315,7 @@ export default function App() {
 
       <div className="app-layout">
       <div className="content">
+        <div className="content-hero">
         {/* Brand */}
         <div className="brand">
           <div className="brand-icon">
@@ -358,7 +365,20 @@ export default function App() {
           </div>
         </div>
 
-        {/* Main card */}
+        {/* Controls row */}
+        <div className="controls-row">
+          <div className="hint">
+            <span className="kbd">Space</span>
+            <span>to {isListening ? 'stop' : 'speak'}</span>
+          </div>
+          {isProcessing && (
+            <button id="cancel-btn" className="cancel-btn" onClick={cancelTask}>Cancel</button>
+          )}
+        </div>
+        </div>
+
+        <div className="content-feed">
+        {/* Main card — scrolls internally when content is long */}
         <div className={`transcript-card ${showCard ? 'visible' : ''}`}>
           {/* Transcript */}
           {transcript && (
@@ -414,15 +434,13 @@ export default function App() {
           )}
         </div>
 
-        {/* Controls row */}
-        <div className="controls-row">
-          <div className="hint">
-            <span className="kbd">Space</span>
-            <span>to {isListening ? 'stop' : 'speak'}</span>
+        {history.length > 0 && (
+          <div className="history-tray" role="list">
+            {history.map((cmd, i) => (
+              <div key={i} className="history-chip" title={cmd}>{cmd}</div>
+            ))}
           </div>
-          {isProcessing && (
-            <button id="cancel-btn" className="cancel-btn" onClick={cancelTask}>Cancel</button>
-          )}
+        )}
         </div>
       </div>
 
@@ -430,10 +448,10 @@ export default function App() {
       {showSummary && (
         <aside className="summary-panel">
           <div className="summary-panel-header">
-            <span className="summary-panel-title">Summary</span>
+            <span className="summary-panel-title">{richResult.label}</span>
           </div>
           <div className="summary-panel-body">
-            {richResult.text.split('\n').map((line, i) => (
+            {(richResult.text || '').split('\n').map((line, i) => (
               <p key={i} className="summary-line">
                 {line}
               </p>
@@ -442,15 +460,6 @@ export default function App() {
         </aside>
       )}
       </div>
-
-      {/* History */}
-      {history.length > 0 && (
-        <div className="history-tray" role="list">
-          {history.map((cmd, i) => (
-            <div key={i} className="history-chip" title={cmd}>{cmd}</div>
-          ))}
-        </div>
-      )}
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -481,6 +490,13 @@ export default function App() {
           color: var(--text-primary);
           line-height: 1.6;
           margin-bottom: 24px;
+          max-height: 50vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          text-align: left;
+          white-space: pre-wrap;
         }
         .confirm-actions { display: flex; gap: 12px; justify-content: center; }
         .confirm-btn {
@@ -510,12 +526,13 @@ export default function App() {
           margin-top: 4px;
         }
         .step-item {
-          display: flex; align-items: center; gap: 10px;
+          display: flex; align-items: flex-start; gap: 10px;
           padding: 8px 12px;
           border-radius: 10px;
           background: rgba(255,255,255,0.03);
           border: 1px solid rgba(255,255,255,0.05);
           transition: all 0.3s;
+          min-width: 0;
         }
         .step-running {
           background: rgba(124,58,237,0.08);
@@ -533,13 +550,19 @@ export default function App() {
           font-size: 0.82rem;
           color: var(--text-secondary);
           font-family: var(--font-ui);
+          flex: 1;
+          min-width: 0;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          line-height: 1.45;
         }
         .step-running .step-text { color: #c4b5fd; }
         .step-done    .step-text { color: #6ee7b7; }
         .step-failed  .step-text { color: #fca5a5; }
 
         .controls-row {
-          display: flex; align-items: center; gap: 16px; margin-top: 20px;
+          display: flex; align-items: center; gap: 16px; margin-top: 16px;
+          flex-shrink: 0;
         }
         .cancel-btn {
           font-family: var(--font-ui);
