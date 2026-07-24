@@ -1,0 +1,14 @@
+{"type": "transcript", "text": "\u0905\u092a\u0928 \u092f\u0942\u091f\u0942\u092c", "language": "hi", "ts": "2026-07-24T15:19:02.381393+00:00"}
+{"type": "plan", "plan": {"intent": "unknown", "explanation": "Could not understand the instruction.", "steps": [], "clarification_needed": true, "clarification_question": "I couldn't fully understand '\u0905\u092a\u0928 \u092f\u0942\u091f\u0942\u092c'. Could you rephrase it?"}, "ts": "2026-07-24T15:19:37.289632+00:00"}
+{"type": "outcome", "status": "clarification", "summary": "I couldn't fully understand '\u0905\u092a\u0928 \u092f\u0942\u091f\u0942\u092c'. Could you rephrase it?", "ts": "2026-07-24T15:19:37.307081+00:00"}
+{"type": "transcript", "text": "Open YouTube.", "language": "en", "ts": "2026-07-24T15:20:29.060852+00:00"}
+{"type": "plan", "plan": {"intent": "open_youtube", "explanation": "Opening the YouTube app on macOS.", "steps": [{"tool": "open_app", "args": {"name": "YouTube"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:20:56.340823+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "YouTube"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T15:20:56.390529+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "YouTube"}, "result": {"success": false, "message": "Could not open 'YouTube'. Check the app name or grant Automation permissions in System Settings \u2192 Privacy & Security \u2192 Automation."}, "verified": false, "ts": "2026-07-24T15:20:58.501917+00:00"}
+{"type": "error", "message": "Could not open 'YouTube'. Check the app name or grant Automation permissions in System Settings \u2192 Privacy & Security \u2192 Automation.", "ts": "2026-07-24T15:20:58.506423+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T15:20:58.506597+00:00"}
+{"type": "transcript", "text": "\u0905\u092a\u0928\u094d\u091f\u0947\u0915\u094d\u0938\u094d\u091f \u090f\u0921\u093f\u0924\u0930", "language": "hi", "ts": "2026-07-24T15:23:01.767600+00:00"}
+{"type": "plan", "plan": {"intent": "open_text_editor", "explanation": "Opening the default text editor on macOS.", "steps": [{"tool": "open_app", "args": {"name": "TextEdit"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:23:27.939656+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "TextEdit"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T15:23:27.957427+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "TextEdit"}, "result": {"success": true, "message": "Opened TextEdit"}, "verified": true, "ts": "2026-07-24T15:24:08.383336+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T15:24:08.407063+00:00"}

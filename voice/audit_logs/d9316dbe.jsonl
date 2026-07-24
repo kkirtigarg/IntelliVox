@@ -1,0 +1,6 @@
+{"type": "transcript", "text": "Open notepad. Notepad does not exist in this.", "language": "en", "ts": "2026-07-24T15:26:34.705671+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the default text editor, TextEdit, instead of 'notepad'", "steps": [{"tool": "open_app", "args": {"name": "TextEdit"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:26:49.279052+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T15:26:49.289551+00:00"}
+{"type": "transcript", "text": "Open Notes app.", "language": "en", "ts": "2026-07-24T15:27:17.176664+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the Notes application on macOS.", "steps": [{"tool": "open_app", "args": {"name": "Notes"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:27:28.142820+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T15:27:28.149295+00:00"}

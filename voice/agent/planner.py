@@ -123,8 +123,26 @@ FILES:
   open_file(path: str)         ← opens file with default app
   read_file(path: str)         ← reads plain text file content
   write_file(path: str, content: str)
+                               ← creates a new file. Auto-detects format from extension:
+                                 .txt / .md / .csv → plain text
+                                 .docx             → proper Word document (openable by Pages/Word)
+                                 Use only for NEW files — use edit_file to update existing ones.
+  edit_file(path: str, old_text: str, new_text: str)
+                               ← replaces old_text with new_text in ANY file type in-place.
+                                 Works for: .txt, .md, .csv (plain text)
+                                            .docx (Word — finds text in paragraphs & tables)
+                                            .xlsx/.xls (Excel — finds text in cells)
+                                 ALWAYS use this instead of write_file when editing existing content.
   delete_file(path: str)       ← DESTRUCTIVE, needs confirmation
   move_file(src: str, dst: str)
+
+SPREADSHEETS (Excel .xlsx / CSV — cell-level, never overwrites the whole file):
+  read_spreadsheet(path: str, sheet: str = null)
+                               ← returns headers + rows as JSON, each row has __row_number__
+  update_spreadsheet(path: str, updates: list, sheet: str = null)
+                               ← updates specific cells only. Each update is one of:
+                                 • Find-and-set: {{"find_column":"<column to search>","find_value":"<value to match>","set_column":"<column to update>","set_value":"<new value>"}}
+                                 • Direct cell:  {{"row": <row number>, "column": "<column name>", "value": "<new value>"}}
 
 DOCUMENTS & AI:
   read_pdf(path: str)          ← extracts all text from a PDF, returns .text field
@@ -154,6 +172,13 @@ COMPUTER USE (general — prefer for interactive tasks):
 ═══════════════════════════════════════════════════
 CHAINING EXAMPLES
 ═══════════════════════════════════════════════════
+"read the report PDF, summarize it, save to a file, and open it":
+  Step 1: find_file(name="report")
+  Step 2: read_pdf(path={{step_1_result.path}})
+  Step 3: summarize(text={{step_2_result.text}}, style="bullets")
+  Step 4: write_file(path="~/Desktop/summary.txt", content={{step_3_result.summary}})
+  Step 5: open_file(path={{step_4_result.path}})
+
 "summarize the Talent Hack PDF":
   Step 1: find_file(name="Talent Hack")
   Step 2: read_pdf(path={{step_1_result.path}})
@@ -164,6 +189,10 @@ CHAINING EXAMPLES
   Step 2: read_pdf(path={{step_1_result.path}})
   Step 3: answer_question(text={{step_2_result.text}}, question="what does it say about pricing?")
 
+"open invoice.pdf" or "open the invoice PDF":
+  Step 1: find_file(name="invoice")
+  Step 2: open_file(path={{step_1_result.path}})
+
 "open finder and open the Talent Hack PDF":
   Step 1: open_app(name="Finder")
   Step 2: find_file(name="Talent Hack")
@@ -172,6 +201,28 @@ CHAINING EXAMPLES
 "go through IntelliVox folder and summarize the code":
   Step 1: find_file(name="IntelliVox")
   Step 2: summarize_codebase(directory={{{{step_1_result.path}}}}, style="bullets")
+
+"open the invoice PDF and update the amount in the spreadsheet":
+  Step 1: find_file(name="invoice")
+  Step 2: read_pdf(path={{step_1_result.path}})
+  Step 3: find_file(name="spreadsheet")
+  Step 4: read_spreadsheet(path={{step_3_result.path}})
+  Step 5: update_spreadsheet(path={{step_3_result.path}}, updates=[{{"find_column":"<column name>","find_value":"<value from PDF>","set_column":"<column to update>","set_value":"<new value from PDF>"}}])
+
+"update the date in the notes.txt file":
+  Step 1: find_file(name="notes.txt")
+  Step 2: read_file(path={{step_1_result.path}})
+  Step 3: edit_file(path={{step_1_result.path}}, old_text="<current date text from step 2>", new_text="<new date>")
+
+"change the conclusion in the report.docx":
+  Step 1: find_file(name="report.docx")
+  Step 2: read_file(path={{step_1_result.path}})
+  Step 3: edit_file(path={{step_1_result.path}}, old_text="<current conclusion text>", new_text="<new conclusion>")
+
+"update the price in the budget.xlsx":
+  Step 1: find_file(name="budget.xlsx")
+  Step 2: read_spreadsheet(path={{step_1_result.path}})
+  Step 3: edit_file(path={{step_1_result.path}}, old_text="<current price value>", new_text="<new price>")
 
 "search YouTube for a song and play it":
   Step 1: computer_use(goal="Open Chrome, search YouTube for <song name>, click the first video, and play it")
@@ -210,7 +261,9 @@ def _resolve_placeholders(args: dict, step_results: list[dict]) -> dict:
         if 0 <= step_idx < len(step_results):
             value = step_results[step_idx].get(field, "")
             if value:
-                args_str = args_str.replace(match.group(0), str(value))
+                # json.dumps escapes newlines, tabs, quotes etc; strip surrounding quotes
+                escaped = json.dumps(str(value))[1:-1]
+                args_str = args_str.replace(match.group(0), escaped)
                 changed = True
 
     return json.loads(args_str) if changed else args

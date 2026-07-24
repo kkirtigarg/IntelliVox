@@ -1,0 +1,14 @@
+Participant desktop environment
+================================
+
+Apps available (voice/text):
+  browser / firefox     — web browser
+  files / explorer      — file manager
+  pdf / evince          — PDF viewer
+  notepad / text editor — text editor
+  calc / spreadsheet    — LibreOffice Calc
+  writer / word         — LibreOffice Writer
+  impress / powerpoint  — LibreOffice Impress
+
+Sample files are under Documents/.
+Say or type: reset environment   to restore sample files between tasks.

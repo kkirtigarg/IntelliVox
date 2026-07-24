@@ -7,6 +7,7 @@ Built with React + Electron. This package is the **UI only** — it connects to 
 ## Quick start (desktop)
 
 ```bash
+cd intellivox-ui
 npm install
 cp .env.example .env          # set backend WebSocket URL
 npm run desktop               # native window + hot reload

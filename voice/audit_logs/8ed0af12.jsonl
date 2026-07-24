@@ -1,0 +1,11 @@
+{"type": "transcript", "text": "Open Notes app.", "language": "en", "ts": "2026-07-24T15:29:16.815394+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the Notes application on macOS.", "steps": [{"tool": "open_app", "args": {"name": "Notes"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:29:27.448742+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Notes"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T15:29:27.452085+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Notes"}, "result": {"success": true, "message": "Opened Notes"}, "verified": true, "ts": "2026-07-24T15:29:33.023252+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T15:29:33.034975+00:00"}
+{"type": "transcript", "text": "Open Microsoft Teams.", "language": "en", "ts": "2026-07-24T15:30:01.567719+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening the Microsoft Teams application.", "steps": [{"tool": "open_app", "args": {"name": "Microsoft Teams"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T15:30:12.164329+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "Microsoft Teams"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T15:30:12.166964+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "Microsoft Teams"}, "result": {"success": true, "message": "Opened Microsoft Teams"}, "verified": false, "ts": "2026-07-24T15:30:21.052836+00:00"}
+{"type": "error", "message": "Opened Microsoft Teams", "ts": "2026-07-24T15:30:21.055521+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T15:30:21.055618+00:00"}
