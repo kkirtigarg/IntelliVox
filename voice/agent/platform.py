@@ -27,6 +27,7 @@ MOD_KEY = "command" if IS_MAC else "ctrl"
 
 _MAC_ALIASES = {
     "chrome": "Google Chrome",
+    "google chrome": "Google Chrome",
     "browser": "Google Chrome",
     "firefox": "Firefox",
     "safari": "Safari",
@@ -60,13 +61,24 @@ _MAC_ALIASES = {
 }
 
 # Linux: values are executable names or .desktop basenames (resolved at runtime)
+# Prefer Firefox over Brave when Chrome/Chromium aren't installed (common on Linux).
 _LINUX_ALIASES = {
-    "chrome": ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "brave-browser", "brave"],
-    "browser": ["firefox", "brave-browser", "google-chrome", "chromium", "brave"],
+    "chrome": [
+        "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+        "firefox", "brave", "brave-browser",
+    ],
+    "google chrome": [
+        "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+        "firefox", "brave", "brave-browser",
+    ],
+    "google-chrome": [
+        "google-chrome", "google-chrome-stable", "chromium", "firefox", "brave",
+    ],
+    "browser": ["firefox", "brave", "brave-browser", "google-chrome", "chromium"],
     "firefox": ["firefox"],
-    "brave": ["brave-browser", "brave"],
-    "edge": ["microsoft-edge", "microsoft-edge-stable"],
-    "safari": ["firefox"],  # no Safari on Linux — fall back to Firefox
+    "brave": ["brave", "brave-browser"],
+    "edge": ["microsoft-edge", "microsoft-edge-stable", "firefox", "brave"],
+    "safari": ["firefox", "brave"],  # no Safari on Linux — fall back to Firefox
     "terminal": ["xfce4-terminal", "kitty", "gnome-terminal", "konsole", "xterm", "alacritty"],
     "finder": ["thunar", "nautilus", "dolphin", "pcmanfm", "nemo"],
     "files": ["thunar", "nautilus", "dolphin", "pcmanfm", "nemo"],
@@ -94,20 +106,53 @@ _LINUX_ALIASES = {
 def resolve_app_name(name: str) -> str:
     """Map a friendly alias to a platform-specific app/executable name."""
     key = name.lower().strip()
+    # Normalize common spoken forms
+    key = re.sub(r"\s+", " ", key)
+    key = key.replace("googlechrome", "google chrome")
+    if key.startswith("google chrome"):
+        key = "google chrome"
     if IS_MAC:
-        return _MAC_ALIASES.get(key, name)
+        return _MAC_ALIASES.get(key, _MAC_ALIASES.get(key.replace(" ", ""), name))
     if IS_LINUX:
         candidates = _LINUX_ALIASES.get(key)
         if candidates:
             for cmd in candidates:
                 if shutil.which(cmd):
                     return cmd
+            # Nothing installed from the list — still return first for a clear error
             return candidates[0]
         # Pass through if already an executable
         if shutil.which(name):
             return name
+        # Try first word (e.g. "firefox and open google" → firefox)
+        first = key.split()[0] if key else ""
+        if first and first in _LINUX_ALIASES:
+            return resolve_app_name(first)
+        if shutil.which(first):
+            return first
         return name
     return name
+
+
+def browser_is_available(alias: str) -> bool:
+    """True if the given browser alias resolves to an installed executable."""
+    if IS_MAC:
+        app = resolve_app_name(alias)
+        return (Path("/Applications") / f"{app}.app").exists() or (
+            Path.home() / "Applications" / f"{app}.app"
+        ).exists()
+    if IS_LINUX:
+        resolved = resolve_app_name(alias)
+        return bool(shutil.which(resolved))
+    return True
+
+
+def preferred_browser() -> str:
+    """Pick a sensible default browser alias (Firefox first on Linux)."""
+    for alias in ("firefox", "chrome", "brave", "edge"):
+        if browser_is_available(alias):
+            return alias
+    return "chrome"
 
 
 def normalize_hotkey(key: str) -> str:
@@ -365,51 +410,156 @@ def open_url(url: str, browser: str | None = None) -> dict:
 
 # ── Find files ────────────────────────────────────────────────────────────────
 
-def find_file(name: str, directory: str | None = None) -> dict:
-    """Search for a file by name (Spotlight on macOS, find/locate on Linux)."""
+_FIND_SKIP_DIR_PARTS = (
+    "/node_modules/", "/.git/", "/.venv/", "/venv/", "/__pycache__/",
+    "/dist/", "/build/", "/.cache/", "/site-packages/", "/.npm/",
+    "/.local/share/Trash/",
+)
+
+
+def find_file(name: str, directory: str | None = None, ext: str = "") -> dict:
+    """
+    Search for a file by name (Spotlight on macOS, find on Linux).
+
+    ext: optional extension filter without dot, e.g. "pdf", "pptx"
+    Skips junk trees like node_modules / venv.
+    """
     search_dir = str(Path(directory or HOME).expanduser())
+    needle = (name or "").strip()
+    ext_norm = (ext or "").lstrip(".").lower()
+
+    # Generic "find a PDF" when name is empty / just an extension word
+    if not needle or needle.lower() in {".pdf", "pdf", "*.pdf", "document", "file"}:
+        if not ext_norm:
+            ext_norm = "pdf" if needle.lower() in {".pdf", "pdf", "*.pdf", ""} else ""
+        needle = ""
+
     matches: list[str] = []
 
+    def _is_junk(p: str) -> bool:
+        pl = p.replace("\\", "/").lower()
+        return any(part in pl for part in _FIND_SKIP_DIR_PARTS)
+
+    def _collect(raw_lines: list[str]) -> list[str]:
+        out = []
+        for line in raw_lines:
+            p = line.strip()
+            if not p or _is_junk(p):
+                continue
+            if ext_norm and not p.lower().endswith(f".{ext_norm}"):
+                # Also allow directories only when not filtering by ext
+                continue
+            out.append(p)
+        return out
+
     if IS_MAC and shutil.which("mdfind"):
-        result = subprocess.run(
-            ["mdfind", "-onlyin", search_dir, "-name", name],
-            capture_output=True, text=True,
-        )
-        matches = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-        if not matches and search_dir != HOME:
-            result2 = subprocess.run(
-                ["mdfind", "-onlyin", HOME, name],
+        if needle:
+            result = subprocess.run(
+                ["mdfind", "-onlyin", search_dir, "-name", needle],
                 capture_output=True, text=True,
             )
-            matches = [l.strip() for l in result2.stdout.strip().splitlines() if l.strip()]
+            matches = _collect(result.stdout.strip().splitlines())
+        elif ext_norm:
+            result = subprocess.run(
+                ["mdfind", "-onlyin", search_dir, f"kMDItemFSName == '*.{ext_norm}'cd"],
+                capture_output=True, text=True,
+            )
+            matches = _collect(result.stdout.strip().splitlines())
+        if not matches and search_dir != HOME:
+            fallback_q = needle or (f".{ext_norm}" if ext_norm else "")
+            if fallback_q:
+                result2 = subprocess.run(
+                    ["mdfind", "-onlyin", HOME, "-name", fallback_q],
+                    capture_output=True, text=True,
+                )
+                matches = _collect(result2.stdout.strip().splitlines())
     else:
         # find — works everywhere; limit depth for speed
-        result = subprocess.run(
-            [
+        find_cmd = [
+            "find", search_dir,
+            "-maxdepth", "6",
+            "(",
+            "-type", "f",
+            "-o", "-type", "d",
+            ")",
+        ]
+        if needle:
+            find_cmd += ["-iname", f"*{needle}*"]
+        if ext_norm:
+            # Prefer files with the extension (still allow name match dirs filtered out later)
+            find_cmd = [
                 "find", search_dir,
                 "-maxdepth", "6",
-                "-iname", f"*{name}*",
-                "-not", "-path", "*/.*",
-            ],
-            capture_output=True, text=True, timeout=15,
-        )
-        matches = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-
-        if not matches and shutil.which("locate"):
-            result2 = subprocess.run(
-                ["locate", "-i", "-l", "20", name],
-                capture_output=True, text=True, timeout=10,
-            )
-            matches = [
-                l.strip() for l in result2.stdout.strip().splitlines()
-                if l.strip() and l.startswith(HOME)
+                "-type", "f",
+                "-iname", f"*{needle}*.{ext_norm}" if needle else f"*.{ext_norm}",
             ]
+        find_cmd += ["-not", "-path", "*/.*"]
+        # Prune junk directories early
+        for junk in ("node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build"):
+            find_cmd += ["-not", "-path", f"*/{junk}/*"]
+
+        try:
+            result = subprocess.run(
+                find_cmd,
+                capture_output=True, text=True, timeout=20,
+            )
+            matches = _collect(result.stdout.strip().splitlines())
+        except subprocess.TimeoutExpired:
+            matches = []
+
+        if not matches and shutil.which("locate") and needle:
+            try:
+                result2 = subprocess.run(
+                    ["locate", "-i", "-l", "40", needle],
+                    capture_output=True, text=True, timeout=10,
+                )
+                matches = _collect([
+                    l for l in result2.stdout.strip().splitlines()
+                    if l.strip().startswith(HOME)
+                ])
+            except subprocess.TimeoutExpired:
+                matches = []
 
     if not matches:
-        return {"success": False, "message": f"No file found matching '{name}'", "matches": []}
+        label = needle or (f"*.{ext_norm}" if ext_norm else "file")
+        return {"success": False, "message": f"No file found matching '{label}'", "matches": []}
 
-    matches.sort(key=lambda p: (len(p.split(os.sep)), p))
-    return {"success": True, "path": matches[0], "matches": matches[:5]}
+    # Prefer .pptx when searching for presentations / decks; prefer .pdf for docs
+    def _rank(p: str) -> tuple:
+        pl = p.lower()
+        n = (needle or "").lower()
+        path_obj = Path(p)
+        is_file = path_obj.is_file() if path_obj.exists() else ("." in path_obj.name)
+        is_pptx = pl.endswith((".pptx", ".ppt"))
+        is_pdf = pl.endswith(".pdf")
+        name_is_pptx = n in ("pptx", "ppt", "powerpoint", "presentation", "slides", "deck")
+        prefer_type = 0
+        if ext_norm == "pdf" or "pdf" in n:
+            prefer_type = 0 if is_pdf else 2
+        elif name_is_pptx or ext_norm in ("pptx", "ppt"):
+            prefer_type = 0 if is_pptx else 2
+        elif is_pptx and "ppt" in n:
+            prefer_type = 0
+        # Prefer real files over directories; prefer Downloads/Documents; prefer shorter paths
+        prefer_file = 0 if is_file else 1
+        prefer_docs = 0 if ("/downloads/" in pl or "/documents/" in pl) else 1
+        # Prefer basename that contains the needle
+        base = path_obj.name.lower()
+        prefer_name = 0 if (n and n in base) else 1
+        try:
+            mtime = -path_obj.stat().st_mtime if path_obj.exists() else 0
+        except OSError:
+            mtime = 0
+        return (prefer_type, prefer_file, prefer_name, prefer_docs, len(p.split(os.sep)), mtime, p)
+
+    matches.sort(key=_rank)
+    best = matches[0]
+    return {
+        "success": True,
+        "path": best,
+        "matches": matches[:5],
+        "message": f"Found: {Path(best).name}",
+    }
 
 
 # ── Screenshot ────────────────────────────────────────────────────────────────

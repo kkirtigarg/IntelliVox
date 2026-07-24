@@ -28,11 +28,15 @@ def verify_app_open(app_name: str, timeout: float = 3.0) -> dict:
         app_name,
         resolved,
         Path(resolved).name,
-        "Google Chrome", "Chrome", "chromium", "brave", "Brave",
+        "Google Chrome", "Chrome", "chromium", "brave", "Brave", "Brave Browser",
         "Firefox", "firefox",
         "Finder", "Thunar", "Nautilus", "Dolphin", "Files",
         "Terminal", "xfce4-terminal", "kitty", "gnome-terminal", "konsole",
     }
+    # Chrome alias may open Brave/Chromium when Chrome isn't installed
+    if any(x in app_name.lower() for x in ("chrome", "browser")):
+        check.update({"brave", "Brave", "Brave Browser", "chromium", "Chromium", "firefox", "Firefox"})
+
     # Only keep aliases relevant to the requested app
     relevant = [
         a for a in check

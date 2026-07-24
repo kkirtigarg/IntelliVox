@@ -1,0 +1,20 @@
+{"type": "transcript", "text": "Open notes.", "language": "en", "ts": "2026-07-24T18:32:02.770890+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening notes.", "steps": [{"tool": "open_app", "args": {"name": "notes"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:32:02.772214+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "notes"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T18:32:02.772622+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "notes"}, "result": {"success": true, "message": "Opened mousepad"}, "verified": false, "ts": "2026-07-24T18:32:12.055896+00:00"}
+{"type": "error", "message": "Opened mousepad", "ts": "2026-07-24T18:32:12.056152+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T18:32:12.056218+00:00"}
+{"type": "transcript", "text": "Open firefox", "language": "en", "ts": "2026-07-24T18:32:29.441235+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening firefox.", "steps": [{"tool": "open_app", "args": {"name": "firefox"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:32:29.442382+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "firefox"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T18:32:29.442565+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "firefox"}, "result": {"success": true, "message": "Opened firefox"}, "verified": true, "ts": "2026-07-24T18:32:31.067754+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 1 of 1 steps.", "ts": "2026-07-24T18:32:31.068713+00:00"}
+{"type": "transcript", "text": "Open firefox and I will make it, just shut up.", "language": "en", "ts": "2026-07-24T18:32:55.043533+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening firefox and i will make it, just shut up.", "steps": [{"tool": "open_app", "args": {"name": "firefox and i will make it, just shut up"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:32:55.046383+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T18:32:55.046680+00:00"}
+{"type": "transcript", "text": "Open firefox and open google on it.", "language": "en", "ts": "2026-07-24T18:33:10.809693+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening firefox and open google on it.", "steps": [{"tool": "open_app", "args": {"name": "firefox and open google on it"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:33:10.811010+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T18:33:10.811192+00:00"}
+{"type": "transcript", "text": "Open Firefox and open Google on it.", "language": "en", "ts": "2026-07-24T18:33:44.929991+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "Opening firefox and open google on it.", "steps": [{"tool": "open_app", "args": {"name": "firefox and open google on it"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:33:44.931030+00:00"}
+{"type": "outcome", "status": "cancelled", "summary": "User cancelled the task.", "ts": "2026-07-24T18:33:44.931152+00:00"}

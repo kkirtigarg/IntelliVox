@@ -1,0 +1,22 @@
+{"type": "transcript", "text": "Open notes.", "language": "en", "ts": "2026-07-24T18:23:01.166748+00:00"}
+{"type": "plan", "plan": {"intent": "open_notes", "explanation": "opens notes application", "steps": [{"tool": "open_app", "args": {"name": "notes"}}]}, "ts": "2026-07-24T18:23:15.755547+00:00"}
+{"type": "safety", "tool": "open_app", "args": {"name": "notes"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T18:23:15.756966+00:00"}
+{"type": "action", "tool": "open_app", "args": {"name": "notes"}, "result": {"success": true, "message": "Opened mousepad"}, "verified": false, "ts": "2026-07-24T18:23:31.865685+00:00"}
+{"type": "error", "message": "Opened mousepad", "ts": "2026-07-24T18:23:31.865942+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T18:23:31.866017+00:00"}
+{"type": "transcript", "text": "Open firefox", "language": "en", "ts": "2026-07-24T18:23:44.302354+00:00"}
+{"type": "plan", "plan": {"intent": "open", "explanation": "Opens Firefox", "steps": [{"tool": "firefox"}]}, "ts": "2026-07-24T18:23:46.611320+00:00"}
+{"type": "safety", "tool": "firefox", "args": {}, "decision": "confirm", "reason": "Unknown tool 'firefox' \u2014 needs user confirmation.", "ts": "2026-07-24T18:23:46.611614+00:00"}
+{"type": "confirmation", "tool": "firefox", "response": "waiting", "ts": "2026-07-24T18:23:46.612293+00:00"}
+{"type": "confirmation", "tool": "firefox", "response": "yes", "ts": "2026-07-24T18:23:49.230551+00:00"}
+{"type": "action", "tool": "firefox", "args": {}, "result": {"success": false, "message": "Unknown tool: firefox"}, "verified": false, "ts": "2026-07-24T18:23:49.231301+00:00"}
+{"type": "error", "message": "Unknown tool: firefox", "ts": "2026-07-24T18:23:49.231580+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T18:23:49.231712+00:00"}
+{"type": "transcript", "text": "Open fire folks.", "language": "en", "ts": "2026-07-24T18:26:15.558770+00:00"}
+{"type": "plan", "plan": {"intent": "open_app", "explanation": "opens a specified application", "steps": [{"tool": "finder", "args": {}}]}, "ts": "2026-07-24T18:26:18.368239+00:00"}
+{"type": "safety", "tool": "finder", "args": {}, "decision": "confirm", "reason": "Unknown tool 'finder' \u2014 needs user confirmation.", "ts": "2026-07-24T18:26:18.368438+00:00"}
+{"type": "confirmation", "tool": "finder", "response": "waiting", "ts": "2026-07-24T18:26:18.368816+00:00"}
+{"type": "confirmation", "tool": "finder", "response": "yes", "ts": "2026-07-24T18:26:23.286477+00:00"}
+{"type": "action", "tool": "finder", "args": {}, "result": {"success": false, "message": "Unknown tool: finder"}, "verified": false, "ts": "2026-07-24T18:26:23.287321+00:00"}
+{"type": "error", "message": "Unknown tool: finder", "ts": "2026-07-24T18:26:23.287636+00:00"}
+{"type": "outcome", "status": "partial", "summary": "Done! Completed 0 of 1 steps.", "ts": "2026-07-24T18:26:23.287727+00:00"}

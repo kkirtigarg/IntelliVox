@@ -16,6 +16,7 @@ function useAgentVoice() {
   const [statusText, setStatusText] = useState('');
   const [steps, setSteps]         = useState([]);
   const [confirmData, setConfirmData] = useState(null);
+  const [popupData, setPopupData]     = useState(null); // { kind, title, text }
   const [richResult, setRichResult] = useState(null); // { label, text }
   const [history, setHistory]     = useState([]);
   const [errorMsg, setErrorMsg]   = useState('');
@@ -24,109 +25,186 @@ function useAgentVoice() {
   const mediaRef   = useRef(null);
   const chunksRef  = useRef([]);
   const streamRef  = useRef(null);
+  const phaseRef   = useRef('idle');
+  const onMessageRef = useRef(null);
+  const busyBeforeListenRef = useRef(false);
 
-  /* ── WebSocket setup ── */
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  const showPopup = useCallback((kind, title, text) => {
+    setPopupData({
+      kind: kind || 'info',
+      title: title || (
+        kind === 'changed' ? 'Instruction updated'
+        : kind === 'unsafe' ? "Can't do that safely"
+        : kind === 'uncertain' ? "Can't complete confidently"
+        : kind === 'impossible' ? "Can't complete that"
+        : 'Instruction cancelled'
+      ),
+      text: text || '',
+    });
+  }, []);
+
+  /* ── WebSocket setup (handler via ref so HMR / re-renders always apply) ── */
   const connectWS = useCallback(() => {
-    if (wsRef.current?.readyState < 2) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
+    try { wsRef.current?.close(); } catch { /* ignore */ }
+
     const ws = new WebSocket(WS_URL);
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      handleServerMessage(msg);
+      try {
+        const msg = JSON.parse(e.data);
+        onMessageRef.current?.(msg);
+      } catch (err) {
+        console.warn('[IntelliVox] bad WS message', err);
+      }
     };
     ws.onerror = () => {
       setErrorMsg(`Cannot connect to agent server (${WS_URL}). Is it running?`);
       setPhase('error');
     };
+    ws.onclose = () => {
+      if (wsRef.current === ws) wsRef.current = null;
+    };
     wsRef.current = ws;
   }, []);
 
-  const handleServerMessage = (msg) => {
-    switch (msg.type) {
-      case 'transcribing':
-        setPhase('transcribing');
-        setStatusText('Transcribing your voice…');
-        break;
+  useEffect(() => {
+    onMessageRef.current = (msg) => {
+      switch (msg.type) {
+        case 'transcribing':
+          setPhase('transcribing');
+          setStatusText('Transcribing your voice…');
+          break;
 
-      case 'transcribed':
-        setTranscript(msg.text);
-        setLanguage(msg.language || '');
-        setHistory(prev => msg.text ? [msg.text, ...prev].slice(0, 5) : prev);
-        break;
-
-      case 'planning':
-        setPhase('planning');
-        setStatusText(msg.text);
-        break;
-
-      case 'plan':
-        setPhase('executing');
-        setSteps((msg.steps || []).map(s => ({ ...s, status: 'pending' })));
-        setStatusText(msg.explanation || 'Executing…');
-        break;
-
-      case 'executing':
-        setSteps(prev => prev.map((s, i) =>
-          i === msg.step_index ? { ...s, status: 'running', displayText: msg.text } : s
-        ));
-        setStatusText(msg.text);
-        break;
-
-      case 'step_done':
-        setSteps(prev => prev.map((s, i) =>
-          i === msg.step_index ? { ...s, status: 'done', displayText: msg.text } : s
-        ));
-        break;
-
-      case 'step_failed':
-        setSteps(prev => prev.map((s, i) =>
-          i === msg.step_index ? { ...s, status: 'failed', displayText: msg.text } : s
-        ));
-        break;
-
-      case 'confirm':
-        setPhase('confirm');
-        setConfirmData({ text: msg.text, tool: msg.tool, step_index: msg.step_index });
-        break;
-
-      case 'safety_block':
-        setPhase('error');
-        setErrorMsg(msg.text);
-        break;
-
-      case 'clarify':
-        setPhase('clarify');
-        setStatusText(msg.text);
-        break;
-
-      case 'done':
-        setPhase('done');
-        setStatusText(msg.text);
-        break;
-
-      case 'rich_result':
-        // Only show summary panel for explicit summary requests
-        if (msg.label === 'Summary') {
-          setRichResult({ label: msg.label, text: msg.text });
+        case 'transcribed': {
+          setTranscript(msg.text);
+          setLanguage(msg.language || '');
+          setHistory(prev => msg.text ? [msg.text, ...prev].slice(0, 5) : prev);
+          // Speaking over a running task → expect cancel/change popup from server
+          if (busyBeforeListenRef.current && msg.text) {
+            const lower = msg.text.trim().toLowerCase();
+            const isCancel = /^(please\s+)?(cancel|stop|abort|never\s*mind|forget\s+(it|that)|quit|enough)\b/.test(lower);
+            if (isCancel) {
+              showPopup('cancelled', 'Instruction cancelled', 'Okay — cancelling the current instruction…');
+              setStatusText('Cancelling…');
+            } else {
+              showPopup(
+                'changed',
+                'Instruction updated',
+                `Got it — switching to: ${msg.text}`,
+              );
+              setStatusText('Switching instructions…');
+            }
+          }
+          busyBeforeListenRef.current = false;
+          break;
         }
-        break;
 
-      case 'error':
-        setPhase('error');
-        setErrorMsg(msg.text);
-        break;
+        case 'planning':
+          setPhase('planning');
+          setStatusText(msg.text);
+          break;
 
-      case 'info':
-        setStatusText(msg.text);
-        break;
-    }
-  };
+        case 'plan':
+          setPhase('executing');
+          setSteps((msg.steps || []).map(s => ({ ...s, status: 'pending' })));
+          setStatusText(msg.explanation || 'Executing…');
+          break;
+
+        case 'executing':
+          setSteps(prev => prev.map((s, i) =>
+            i === msg.step_index ? { ...s, status: 'running', displayText: msg.text } : s
+          ));
+          setStatusText(msg.text);
+          break;
+
+        case 'step_done':
+          setSteps(prev => prev.map((s, i) =>
+            i === msg.step_index ? { ...s, status: 'done', displayText: msg.text } : s
+          ));
+          break;
+
+        case 'step_failed':
+          setSteps(prev => prev.map((s, i) =>
+            i === msg.step_index ? { ...s, status: 'failed', displayText: msg.text } : s
+          ));
+          break;
+
+        case 'confirm':
+          setPhase('confirm');
+          setConfirmData({ text: msg.text, tool: msg.tool, step_index: msg.step_index });
+          break;
+
+        case 'safety_block':
+          showPopup('unsafe', "Can't do that safely", msg.text || 'That request was blocked for safety.');
+          setPhase('idle');
+          setConfirmData(null);
+          setStatusText(msg.text || 'Blocked');
+          break;
+
+        case 'clarify':
+          setPhase('clarify');
+          setStatusText(msg.text);
+          break;
+
+        case 'done':
+          setPhase('done');
+          setStatusText(msg.text);
+          break;
+
+        case 'popup':
+          showPopup(msg.kind || 'info', msg.title, msg.text || '');
+          if (msg.kind === 'cancelled') {
+            setPhase('idle');
+            setSteps([]);
+            setConfirmData(null);
+            setStatusText(msg.text || 'Cancelled');
+          } else if (msg.kind === 'changed') {
+            setConfirmData(null);
+            setSteps([]);
+            setStatusText(msg.text || 'Switching instructions…');
+          } else if (['unsafe', 'uncertain', 'impossible'].includes(msg.kind)) {
+            setPhase('idle');
+            setConfirmData(null);
+            setStatusText(msg.text || msg.title || 'Stopped');
+          }
+          break;
+
+        case 'rich_result':
+          if (msg.label === 'Summary') {
+            setRichResult({ label: msg.label, text: msg.text });
+          }
+          break;
+
+        case 'error':
+          setPhase('error');
+          setErrorMsg(msg.text);
+          break;
+
+        case 'info':
+          setStatusText(msg.text);
+          break;
+
+        default:
+          break;
+      }
+    };
+  }, [showPopup]);
 
   /* ── Send control message ── */
   const sendControl = useCallback((text) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(text);
-    }
-  }, []);
+    connectWS();
+    const trySend = (attempts = 0) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(text);
+        return;
+      }
+      if (attempts < 20) setTimeout(() => trySend(attempts + 1), 50);
+    };
+    trySend();
+  }, [connectWS]);
 
   const confirm = useCallback((yes) => {
     sendControl(yes ? 'confirm:yes' : 'confirm:no');
@@ -135,19 +213,37 @@ function useAgentVoice() {
   }, [sendControl]);
 
   const cancelTask = useCallback(() => {
+    // Optimistic popup so the user always sees feedback immediately
+    showPopup('cancelled', 'Instruction cancelled', 'Okay — cancelling the current task…');
+    setConfirmData(null);
+    setStatusText('Cancelling…');
     sendControl('cancel');
-    setPhase('idle');
-    setSteps([]);
-    setStatusText('');
-  }, [sendControl]);
+  }, [sendControl, showPopup]);
+
+  const dismissPopup = useCallback(() => {
+    setPopupData(null);
+  }, []);
+
+  // Auto-dismiss interrupt popup after a few seconds
+  useEffect(() => {
+    if (!popupData) return;
+    const t = setTimeout(() => setPopupData(null), 8000);
+    return () => clearTimeout(t);
+  }, [popupData]);
 
   /* ── Mic control ── */
   const startListening = useCallback(async () => {
+    const busy = ['executing', 'planning', 'confirm'].includes(phaseRef.current);
+    busyBeforeListenRef.current = busy;
+
     setTranscript('');
     setLanguage('');
     setErrorMsg('');
-    setSteps([]);
-    setStatusText('');
+    // Keep steps visible when speaking over a running task (change/cancel mid-way)
+    if (!busy) {
+      setSteps([]);
+    }
+    setStatusText(busy ? 'Listening — say a new instruction or “cancel”' : '');
     setRichResult(null);
     setPhase('listening');
     connectWS();
@@ -197,7 +293,8 @@ function useAgentVoice() {
 
   const toggle = useCallback(() => {
     if (phase === 'listening')                  stopListening();
-    else if (['idle','done','error'].includes(phase)) startListening();
+    // Allow speaking a new/cancel instruction while a task is running
+    else if (['idle','done','error','executing','planning','confirm'].includes(phase)) startListening();
   }, [phase, startListening, stopListening]);
 
   // Space bar shortcut
@@ -214,7 +311,7 @@ function useAgentVoice() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  return { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask, sendControl };
+  return { phase, transcript, language, statusText, steps, confirmData, popupData, richResult, history, errorMsg, toggle, confirm, cancelTask, dismissPopup, sendControl };
 }
 
 /* ── Icon components ── */
@@ -271,7 +368,7 @@ const PHASE_LABEL = {
 
 /* ── App ── */
 export default function App() {
-  const { phase, transcript, language, statusText, steps, confirmData, richResult, history, errorMsg, toggle, confirm, cancelTask } = useAgentVoice();
+  const { phase, transcript, language, statusText, steps, confirmData, popupData, richResult, history, errorMsg, toggle, confirm, cancelTask, dismissPopup } = useAgentVoice();
 
   const isListening  = phase === 'listening';
   const isProcessing = ['transcribing','planning','executing'].includes(phase);
@@ -281,6 +378,9 @@ export default function App() {
   const isConfirm    = phase === 'confirm';
   const showSummary = richResult?.label === 'Summary';
   const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify;
+  const canSpeakOver = isProcessing || isConfirm;
+  // Keep Cancel available while speaking over an in-flight task
+  const showCancel   = isProcessing || isConfirm || (isListening && steps.length > 0);
 
   return (
     <div className={`app ${showSummary ? 'has-summary' : ''}`}>
@@ -288,8 +388,33 @@ export default function App() {
       <div className="bg-orb bg-orb-2" />
       <div className="bg-orb bg-orb-3" />
 
+      {/* Mid-task cancel / change popup */}
+      {popupData && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="interrupt-title">
+          <div className={`confirm-modal popup-modal popup-${popupData.kind || 'info'}`}>
+            <div className="confirm-icon">
+              {popupData.kind === 'changed' ? '↻'
+                : popupData.kind === 'unsafe' ? '⛔'
+                : popupData.kind === 'uncertain' || popupData.kind === 'impossible' ? '?'
+                : '■'}
+            </div>
+            <div id="interrupt-title" className="popup-title">{popupData.title}</div>
+            <div className="confirm-text">{popupData.text}</div>
+            <div className="confirm-actions">
+              <button
+                id="popup-ok-btn"
+                className="confirm-btn confirm-yes"
+                onClick={dismissPopup}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation modal */}
-      {isConfirm && confirmData && (
+      {isConfirm && confirmData && !popupData && (
         <div className="confirm-overlay">
           <div className="confirm-modal">
             <div className="confirm-icon">⚠</div>
@@ -326,8 +451,8 @@ export default function App() {
               id="mic-toggle-btn"
               className={`mic-btn ${isListening ? 'active' : ''} ${isError ? 'err' : ''}`}
               onClick={toggle}
-              disabled={isProcessing || isConfirm}
-              aria-label={isListening ? 'Stop' : 'Start'}
+              disabled={phase === 'transcribing'}
+              aria-label={isListening ? 'Stop' : canSpeakOver ? 'Speak to change or cancel' : 'Start'}
               aria-pressed={isListening}
             >
               {isProcessing ? (
@@ -408,9 +533,15 @@ export default function App() {
         <div className="controls-row">
           <div className="hint">
             <span className="kbd">Space</span>
-            <span>to {isListening ? 'stop' : 'speak'}</span>
+            <span>
+              {isListening
+                ? 'to stop'
+                : canSpeakOver
+                  ? 'to change or cancel'
+                  : 'to speak'}
+            </span>
           </div>
-          {isProcessing && (
+          {showCancel && (
             <button id="cancel-btn" className="cancel-btn" onClick={cancelTask}>Cancel</button>
           )}
         </div>
@@ -446,11 +577,12 @@ export default function App() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         .confirm-overlay {
-          position: fixed; inset: 0; z-index: 100;
+          position: fixed; inset: 0; z-index: 9999;
           background: rgba(6,6,18,0.8);
           backdrop-filter: blur(12px);
           display: flex; align-items: center; justify-content: center;
           animation: fadeIn 0.2s ease;
+          pointer-events: auto;
         }
         @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
 
@@ -465,6 +597,29 @@ export default function App() {
           box-shadow: 0 0 80px rgba(124,58,237,0.3);
         }
         .confirm-icon { font-size: 2rem; margin-bottom: 12px; }
+        .popup-title {
+          font-family: var(--font-ui);
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin-bottom: 10px;
+        }
+        .popup-cancelled {
+          border-color: rgba(248,113,113,0.45);
+          box-shadow: 0 0 80px rgba(248,113,113,0.18);
+        }
+        .popup-changed {
+          border-color: rgba(56,189,248,0.45);
+          box-shadow: 0 0 80px rgba(56,189,248,0.18);
+        }
+        .popup-unsafe {
+          border-color: rgba(248,113,113,0.55);
+          box-shadow: 0 0 80px rgba(239,68,68,0.22);
+        }
+        .popup-uncertain, .popup-impossible {
+          border-color: rgba(251,191,36,0.5);
+          box-shadow: 0 0 80px rgba(251,191,36,0.18);
+        }
         .confirm-text {
           font-family: var(--font-ui);
           font-size: 0.95rem;

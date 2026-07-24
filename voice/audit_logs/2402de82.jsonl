@@ -1,0 +1,3 @@
+{"type": "transcript", "text": "Hello, hello, hello, hello, hello, hello.", "language": "en", "ts": "2026-07-24T21:12:12.328004+00:00"}
+{"type": "plan", "plan": {"intent": "short label", "explanation": "one sentence of what you will do", "steps": [{"tool": "computer_use", "args": {"goal": "play song"}}, {"tool": "open_browser", "args": {"browser": "chrome"}}, {"tool": "click", "args": {"key": "enter"}}, {"tool": "play", "args": {"song_name": "Hello, hello, hello, hello, hello, hello."}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T21:12:29.676447+00:00"}
+{"type": "outcome", "status": "uncertain", "summary": "I don't confidently support the action 'play' for this request.", "ts": "2026-07-24T21:12:29.678592+00:00"}

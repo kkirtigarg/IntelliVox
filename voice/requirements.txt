@@ -5,8 +5,10 @@
 #   • ffmpeg
 #       macOS:  brew install ffmpeg
 #       Linux:  sudo pacman -S ffmpeg   /   sudo apt install ffmpeg
-#   • Ollama          — https://ollama.com  +  ollama pull llama3.1
+#   • Ollama          — https://ollama.com  +  ollama pull llama3.2:1b
+#   • Optional larger: ollama pull llama3.2   then: export INTELLIVOX_LLM_MODEL=llama3.2
 #   • Vision (computer_use): ollama pull llama3.2-vision
+#   • Override model anytime: export INTELLIVOX_LLM_MODEL=llama3.2:1b
 #
 # Linux extras (recommended for desktop control on X11):
 #   • xdg-utils, imagemagick (import), pactl/pulseaudio-utils, wmctrl
@@ -49,9 +51,11 @@ pyperclip==1.11.0
 python-xlib==0.33; sys_platform == "linux"
 pyobjc==12.2.1; sys_platform == "darwin"
 
-# ── Documents (PDF read / summarize) ──────────────────────────────────────────
+# ── Documents (PDF / spreadsheet / presentation) ──────────────────────────────
 pdfplumber==0.11.10
 pypdf==6.14.2
+openpyxl==3.1.5
+python-pptx==1.0.2
 
 # ── Text-to-speech (local, offline) ─────────────────────────────────────────
 pyttsx3==2.99

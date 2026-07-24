@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from .browser import open_browser, navigate_url, google_search, youtube_search
 from .desktop import open_app, close_app, type_text, press_key, click, take_screenshot, set_volume
-from .files   import list_files, read_file, write_file, delete_file, move_file, open_file, find_file
+from .files   import list_files, read_file, write_file, delete_file, move_file, open_file, find_file, organize_files
 from .document import (
     read_pdf,
     summarize,
@@ -15,6 +15,13 @@ from .document import (
     create_dummy_file,
     compare_documents,
     compare_pdf_with_dummy,
+    compare_open_files,
+    write_spreadsheet,
+    extract_pdf_to_spreadsheet,
+)
+from .presentation import (
+    update_presentation_from_document,
+    create_presentation_from_document,
 )
 from .computer import computer_use
 
@@ -43,6 +50,7 @@ TOOLS = {
     "delete_file":     delete_file,
     "move_file":       move_file,
     "open_file":       open_file,
+    "organize_files":  organize_files,
 
     # Documents & AI
     "read_pdf":              read_pdf,
@@ -52,6 +60,11 @@ TOOLS = {
     "create_dummy_file":     create_dummy_file,
     "compare_documents":     compare_documents,
     "compare_pdf_with_dummy": compare_pdf_with_dummy,
+    "compare_open_files":    compare_open_files,
+    "write_spreadsheet":     write_spreadsheet,
+    "extract_pdf_to_spreadsheet": extract_pdf_to_spreadsheet,
+    "update_presentation_from_document": update_presentation_from_document,
+    "create_presentation_from_document": create_presentation_from_document,
 
     # General computer control (vision + mouse/keyboard loop)
     "computer_use":    computer_use,

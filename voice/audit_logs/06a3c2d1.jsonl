@@ -1,0 +1,7 @@
+{"type": "transcript", "text": "Open Firefox and open Google on it.", "language": "en", "ts": "2026-07-24T18:38:58.008327+00:00"}
+{"type": "plan", "plan": {"intent": "open_browser_google", "explanation": "Opening firefox and navigating to Google.", "steps": [{"tool": "open_browser", "args": {"browser": "firefox"}}, {"tool": "navigate_url", "args": {"url": "https://www.google.com", "browser": "firefox"}}], "clarification_needed": false, "clarification_question": null}, "ts": "2026-07-24T18:38:58.009591+00:00"}
+{"type": "safety", "tool": "open_browser", "args": {"browser": "firefox"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T18:38:58.009866+00:00"}
+{"type": "action", "tool": "open_browser", "args": {"browser": "firefox"}, "result": {"success": true, "message": "Opened firefox"}, "verified": true, "ts": "2026-07-24T18:38:59.539837+00:00"}
+{"type": "safety", "tool": "navigate_url", "args": {"url": "https://www.google.com", "browser": "firefox"}, "decision": "allow", "reason": "Tool is in the safe list.", "ts": "2026-07-24T18:38:59.540281+00:00"}
+{"type": "action", "tool": "navigate_url", "args": {"url": "https://www.google.com", "browser": "firefox"}, "result": {"success": true, "message": "Navigated to https://www.google.com"}, "verified": true, "ts": "2026-07-24T18:39:00.042463+00:00"}
+{"type": "outcome", "status": "success", "summary": "Done! Completed 2 of 2 steps.", "ts": "2026-07-24T18:39:00.043248+00:00"}

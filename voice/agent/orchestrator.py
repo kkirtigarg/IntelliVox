@@ -14,11 +14,15 @@ Message protocol (server → client):
   { "type": "clarify",       "text": "Could you rephrase...?" }
   { "type": "done",          "text": "All done!" }
   { "type": "error",         "text": "..." }
+  { "type": "popup",         "kind": "cancelled"|"changed"|"unsafe"|"uncertain"|"impossible",
+                               "title": "...", "text": "..." }
+                               ← cancel/change mid-task, OR task cannot complete safely/confidently
+  { "type": "info",          "text": "..." }
 
 Message protocol (client → server):
   Binary: raw audio blob (webm/opus) → triggers transcription + agent
   Text:   "confirm:yes"  or  "confirm:no"  → for confirmation prompts
-  Text:   "cancel"  → abort current task
+  Text:   "cancel"  → abort current task (popup response)
   Text:   "pause"   → pause after current step
   Text:   "resume"  → resume paused task
 """
@@ -26,6 +30,7 @@ Message protocol (client → server):
 import asyncio
 import json
 import logging
+import re
 import subprocess
 import tempfile
 import time
@@ -113,6 +118,30 @@ def transcribe(audio: np.ndarray) -> dict:
 
 # ── Agent execution loop ───────────────────────────────────────────────────────
 
+# ── Mid-task interrupt helpers ────────────────────────────────────────────────
+
+_CANCEL_PHRASES = re.compile(
+    r"^\s*(?:please\s+)?(?:"
+    r"cancel(?:\s+(?:that|it|this|the\s+task|task))?|"
+    r"stop(?:\s+(?:that|it|this|the\s+task|task))?|"
+    r"abort|"
+    r"never\s*mind|"
+    r"forget\s+(?:it|that)|"
+    r"don'?t\s+(?:do\s+)?(?:that|it)|"
+    r"quit|"
+    r"enough"
+    r")\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_cancel_phrase(text: str) -> bool:
+    """True when the spoken utterance is only a cancel/stop request."""
+    if not text or not text.strip():
+        return False
+    return bool(_CANCEL_PHRASES.match(text.strip()))
+
+
 class AgentSession:
     """Manages one active WebSocket connection + task execution."""
 
@@ -125,16 +154,86 @@ class AgentSession:
         self._confirm_event  = asyncio.Event()
         self._confirm_result = None
         self.history_turns   = []
+        # Mid-task interrupt state
+        self._busy = False
+        self._popup_sent = False
+        self._interrupt_kind: str | None = None  # cancelled | changed
+        self._active_task: asyncio.Task | None = None
+        self._run_id = 0
+        self._completed_before_interrupt = 0
+        self._total_steps_before_interrupt = 0
 
     async def send(self, msg: dict):
         await self.ws.send_text(json.dumps(msg))
+
+    async def send_popup(self, kind: str, title: str, text: str, *, speak: bool = True):
+        """Show a client popup for mid-task cancel / instruction change."""
+        self._popup_sent = True
+        self._interrupt_kind = kind
+        payload = {
+            "type":  "popup",
+            "kind":  kind,
+            "title": title,
+            "text":  text,
+        }
+        try:
+            await self.send(payload)
+        except Exception:
+            log.exception("[%s] failed to send popup [%s]", self.session_id, kind)
+        if speak:
+            try:
+                tts.speak(text)
+            except Exception:
+                log.exception("[%s] TTS failed for popup", self.session_id)
+        log.info("[%s] popup [%s]: %s", self.session_id, kind, text)
+
+    def _release_waiters(self):
+        """Unblock confirmation waits so the task loop can exit promptly."""
+        self._confirm_result = False
+        self._confirm_event.set()
+
+    async def abort_current(self, kind: str, message: str | None = None) -> bool:
+        """
+        Cancel the in-flight task and notify the UI with a popup.
+        Returns True if a task was actually busy.
+        """
+        if not self._busy and not self._cancelled:
+            # Still send a cancel popup if the client pressed Cancel with no task
+            if kind == "cancelled":
+                await self.send_popup(
+                    "cancelled",
+                    "Nothing to cancel",
+                    "There is no task running right now.",
+                )
+            return False
+
+        self._cancelled = True
+        self._paused = False
+        self._release_waiters()
+
+        done = self._completed_before_interrupt
+        total = self._total_steps_before_interrupt
+        if kind == "cancelled":
+            title = "Instruction cancelled"
+            text = message or (
+                f"Okay — I cancelled the current task"
+                + (f" after {done} of {total} steps." if total else ".")
+            )
+        else:
+            title = "Instruction updated"
+            text = message or "Got it — switching to your new instruction."
+
+        # Always push a popup for cancel/change so the UI never misses it
+        await self.send_popup(kind, title, text)
+        self.audit.log_outcome(kind, text)
+        return True
 
     async def handle_control(self, text: str):
         """Handle control messages from the client."""
         text = text.strip().lower()
         if text == "cancel":
-            self._cancelled = True
-            log.info("[%s] Task cancelled by user", self.session_id)
+            log.info("[%s] Cancel requested by user", self.session_id)
+            await self.abort_current("cancelled")
         elif text == "pause":
             self._paused = True
             await self.send({"type": "info", "text": "Task paused. Say 'resume' to continue."})
@@ -149,17 +248,77 @@ class AgentSession:
             self._confirm_event.set()
 
     async def wait_for_confirmation(self) -> bool:
-        """Wait until the user sends confirm:yes or confirm:no."""
+        """Wait until the user sends confirm:yes or confirm:no (or cancels)."""
         self._confirm_event.clear()
         self._confirm_result = None
         try:
             await asyncio.wait_for(self._confirm_event.wait(), timeout=30.0)
+            if self._cancelled:
+                return False
             return bool(self._confirm_result)
         except asyncio.TimeoutError:
             return False  # treat timeout as "no"
 
-    async def run_task(self, transcript_result: dict):
+    async def handle_new_transcript(self, result: dict):
+        """
+        Start a task from a transcript. If one is already running, treat the
+        new speech as a mid-task cancel or instruction change and popup.
+        """
+        text = (result.get("text") or "").strip()
+
+        if self._busy:
+            if _is_cancel_phrase(text):
+                await self.abort_current(
+                    "cancelled",
+                    "Okay — I've cancelled the current instruction.",
+                )
+                return
+
+            # Change of instruction mid-way
+            await self.abort_current(
+                "changed",
+                f"Got it. Cancelling the previous task and starting: {text}",
+            )
+
+        # Invalidate any still-finishing prior run, then start fresh
+        self._run_id += 1
+        run_id = self._run_id
+        task = asyncio.create_task(self.run_task(result, run_id=run_id))
+        self._active_task = task
+
+        def _clear(t: asyncio.Task, rid=run_id):
+            if self._active_task is t:
+                self._active_task = None
+
+        task.add_done_callback(_clear)
+
+    async def run_task(self, transcript_result: dict, run_id: int | None = None):
         """Full pipeline: transcript → plan → safety → execute → verify."""
+        if run_id is None:
+            self._run_id += 1
+            run_id = self._run_id
+
+        # Fresh task — clear leftover cancel/pause from a previous run
+        self._cancelled = False
+        self._paused = False
+        self._popup_sent = False
+        self._interrupt_kind = None
+        self._confirm_event.clear()
+        self._confirm_result = None
+        self._busy = True
+        self._completed_before_interrupt = 0
+        self._total_steps_before_interrupt = 0
+
+        try:
+            await self._run_task_body(transcript_result, run_id=run_id)
+        finally:
+            # Only the latest run may clear the busy flag
+            if run_id == self._run_id:
+                self._busy = False
+
+    async def _run_task_body(self, transcript_result: dict, run_id: int = 0):
+        def _stale() -> bool:
+            return run_id != self._run_id or self._cancelled
         text     = transcript_result["text"]
         language = transcript_result["language"]
 
@@ -170,6 +329,30 @@ class AgentSession:
         self.audit.log_transcript(text, language)
         log.info("[%s] Transcript [%s]: %s", self.session_id, language, text)
 
+        # ── 0. Can we complete this safely & confidently? ────────────────────
+        asr_conf = transcript_result.get("confidence")
+        try:
+            asr_conf_f = float(asr_conf) if asr_conf is not None else None
+        except (TypeError, ValueError):
+            asr_conf_f = None
+
+        request_assessment = safety.assess_request(text, asr_confidence=asr_conf_f)
+        log.info(
+            "[%s] Request assessment: %s (%s) — %s",
+            self.session_id,
+            request_assessment.kind,
+            request_assessment.confidence,
+            request_assessment.reason,
+        )
+        if not request_assessment.can_proceed:
+            await self.send_popup(
+                request_assessment.kind,
+                request_assessment.title,
+                request_assessment.message,
+            )
+            self.audit.log_outcome(request_assessment.kind, request_assessment.message)
+            return
+
         # ── 1. Plan ──────────────────────────────────────────────────────────
         await self.send({"type": "planning", "text": "Figuring out your task…"})
         tts.speak("Let me figure that out.")
@@ -178,11 +361,34 @@ class AgentSession:
         action_plan = await loop.run_in_executor(None, plan, text)
         self.audit.log_plan(action_plan)
 
-        if action_plan.get("clarification_needed"):
-            q = action_plan.get("clarification_question", "Could you rephrase that?")
-            await self.send({"type": "clarify", "text": q})
-            tts.speak(q)
-            self.audit.log_outcome("clarification", q)
+        if _stale():
+            if run_id == self._run_id and not self._popup_sent:
+                await self.send_popup(
+                    self._interrupt_kind or "cancelled",
+                    "Instruction cancelled",
+                    "Okay — I stopped before starting.",
+                )
+            return
+
+        plan_assessment = safety.assess_plan(action_plan, transcript=text)
+        log.info(
+            "[%s] Plan assessment: %s — %s",
+            self.session_id,
+            plan_assessment.kind,
+            plan_assessment.reason,
+        )
+        if not plan_assessment.can_proceed:
+            # Prefer clarify-style UX for soft uncertainty; popup for hard refusals
+            if plan_assessment.kind == "uncertain" and action_plan.get("clarification_needed"):
+                await self.send({"type": "clarify", "text": plan_assessment.message})
+                tts.speak(plan_assessment.message)
+            else:
+                await self.send_popup(
+                    plan_assessment.kind,
+                    plan_assessment.title,
+                    plan_assessment.message,
+                )
+            self.audit.log_outcome(plan_assessment.kind, plan_assessment.message)
             return
 
         await self.send({
@@ -190,32 +396,57 @@ class AgentSession:
             "intent":      action_plan.get("intent", ""),
             "explanation": action_plan.get("explanation", ""),
             "steps":       action_plan.get("steps", []),
+            "confidence":  plan_assessment.confidence,
         })
 
         steps = action_plan.get("steps", [])
+        self._total_steps_before_interrupt = len(steps)
         if not steps:
-            await self.send({"type": "error", "text": "I couldn't figure out what to do."})
+            await self.send_popup(
+                "uncertain",
+                "Can't complete that",
+                "I couldn't figure out safe steps for that request.",
+            )
             return
 
         # ── 2. Execute steps ─────────────────────────────────────────────────
         completed    = 0
+        consecutive_failures = 0
         step_results = []   # stores each step's raw result for chaining
         for i, step in enumerate(steps):
-            if self._cancelled:
-                await self.send({"type": "info", "text": "Task cancelled."})
-                self.audit.log_outcome("cancelled", "User cancelled the task.")
-                tts.speak("Task cancelled.")
+            if _stale():
+                if run_id == self._run_id and not self._popup_sent:
+                    await self.send_popup(
+                        self._interrupt_kind or "cancelled",
+                        "Instruction cancelled" if self._interrupt_kind != "changed" else "Instruction updated",
+                        (
+                            f"Stopped after {completed} of {len(steps)} steps."
+                            if self._interrupt_kind != "changed"
+                            else "Previous task stopped — starting your new instruction."
+                        ),
+                    )
+                self.audit.log_outcome(self._interrupt_kind or "cancelled", "Interrupted mid-task")
                 return
 
             # Wait while paused
-            while self._paused and not self._cancelled:
+            while self._paused and not _stale():
                 await asyncio.sleep(0.3)
+            if _stale():
+                if run_id == self._run_id and not self._popup_sent:
+                    await self.send_popup(
+                        "cancelled",
+                        "Instruction cancelled",
+                        f"Okay — cancelled while paused ({completed}/{len(steps)} done).",
+                    )
+                return
 
             tool = step.get("tool", "")
             args = step.get("args", {})
 
             # ── Resolve placeholders from previous step results (chaining) ────
             args = resolve_step_args(args, step_results)
+            # Drop internal orchestration markers before calling the tool
+            args.pop("_src_filled", None)
 
             # ── Safety check ─────────────────────────────────────────────────
             safety_result = safety.check(tool, args, source="voice")
@@ -224,8 +455,7 @@ class AgentSession:
 
             if safety_result.decision == safety.Decision.BLOCK:
                 msg = f"I can't do that: {safety_result.reason}"
-                await self.send({"type": "safety_block", "text": msg})
-                tts.speak(msg)
+                await self.send_popup("unsafe", "Can't do that safely", msg)
                 self.audit.log_outcome("blocked", msg)
                 return
 
@@ -243,6 +473,15 @@ class AgentSession:
                 approved = await self.wait_for_confirmation()
                 self.audit.log_confirmation(tool, "yes" if approved else "no")
 
+                if _stale():
+                    if run_id == self._run_id and not self._popup_sent:
+                        await self.send_popup(
+                            self._interrupt_kind or "cancelled",
+                            "Instruction cancelled",
+                            "Okay — cancelled before that step.",
+                        )
+                    return
+
                 if not approved:
                     await self.send({"type": "info", "text": "Skipped that step."})
                     tts.speak("Okay, skipping.")
@@ -254,6 +493,15 @@ class AgentSession:
             log.info("[%s] → %s(%s)", self.session_id, tool, args)
 
             result = await loop.run_in_executor(None, run_tool, tool, args)
+
+            if _stale():
+                if run_id == self._run_id and not self._popup_sent:
+                    await self.send_popup(
+                        self._interrupt_kind or "cancelled",
+                        "Instruction cancelled" if self._interrupt_kind != "changed" else "Instruction updated",
+                        f"Stopped during step {i + 1} of {len(steps)}.",
+                    )
+                return
 
             # Store result for chaining (next steps can reference it)
             step_results.append(result)
@@ -282,6 +530,55 @@ class AgentSession:
                             ns["args"]["path"] = found_path
                         elif next_tool == "compare_pdf_with_dummy":
                             ns["args"]["pdf_path"] = found_path
+                        elif next_tool == "extract_pdf_to_spreadsheet":
+                            ns["args"]["pdf_path"] = found_path
+                            ns["args"].pop("path", None)
+                    # Fill path_a then path_b on the upcoming compare_open_files step
+                    for j in range(i + 1, len(steps)):
+                        if steps[j].get("tool") == "compare_open_files":
+                            args_j = steps[j].setdefault("args", {})
+                            if not args_j.get("path_a"):
+                                args_j["path_a"] = found_path
+                            elif not args_j.get("path_b") and args_j.get("path_a") != found_path:
+                                args_j["path_b"] = found_path
+                            break
+                        if steps[j].get("tool") == "update_presentation_from_document":
+                            args_j = steps[j].setdefault("args", {})
+                            src = args_j.get("source_path") or ""
+                            ppt = args_j.get("presentation_path") or ""
+                            # Treat unresolved placeholders as empty for injection
+                            src_empty = (not src) or ("{{" in str(src))
+                            ppt_empty = (not ppt) or ("{{" in str(ppt))
+                            if src_empty and not args_j.get("_src_filled"):
+                                args_j["source_path"] = found_path
+                                args_j["_src_filled"] = True
+                            elif ppt_empty and found_path != args_j.get("source_path"):
+                                args_j["presentation_path"] = found_path
+                            # Also append extra source docs when asked for multiple
+                            elif (
+                                found_path != args_j.get("source_path")
+                                and found_path != args_j.get("presentation_path")
+                                and str(found_path).lower().endswith((".pdf", ".txt", ".md", ".docx"))
+                            ):
+                                extra = args_j.get("source_paths") or []
+                                if isinstance(extra, str):
+                                    extra = [p.strip() for p in extra.replace(";", ",").replace("\n", ",").split(",") if p.strip()]
+                                if found_path not in extra:
+                                    extra = list(extra) + [found_path]
+                                    args_j["source_paths"] = extra
+                            break
+                        if steps[j].get("tool") == "create_presentation_from_document":
+                            args_j = steps[j].setdefault("args", {})
+                            src = args_j.get("source_path") or ""
+                            if (not src) or ("{{" in str(src)):
+                                args_j["source_path"] = found_path
+                            break
+                        if steps[j].get("tool") == "organize_files":
+                            args_j = steps[j].setdefault("args", {})
+                            directory = args_j.get("directory") or ""
+                            if (not directory) or ("{{" in str(directory)):
+                                args_j["directory"] = found_path
+                            break
 
                 # read_pdf: inject text into next summarize/answer step
                 elif tool == "read_pdf" and result.get("text"):
@@ -331,8 +628,12 @@ class AgentSession:
                                 ns["args"]["text_a"] = result["content"]
                                 ns["args"].setdefault("label_a", "Dummy Document")
 
-                # compare_documents / compare_pdf_with_dummy: show comparison summary
-                elif tool in ("compare_documents", "compare_pdf_with_dummy") and result.get("summary"):
+                # compare_*: show comparison summary in UI + speak excerpt
+                elif tool in (
+                    "compare_documents",
+                    "compare_pdf_with_dummy",
+                    "compare_open_files",
+                ) and result.get("summary"):
                     done_msg = "Comparison summary complete"
                     if tool == "compare_pdf_with_dummy":
                         parts = []
@@ -342,6 +643,11 @@ class AgentSession:
                             parts.append(f"Dummy → {result['dummy_path']}")
                         if parts:
                             done_msg = "Compared: " + " | ".join(parts)
+                    elif tool == "compare_open_files":
+                        done_msg = (
+                            f"Compared open files: "
+                            f"{result.get('label_a', 'A')} vs {result.get('label_b', 'B')}"
+                        )
                     await self.send({"type": "rich_result", "label": "Summary", "text": result["summary"]})
                     short = result["summary"][:220].replace("\n", " ").strip()
                     tts.speak(short)
@@ -353,23 +659,117 @@ class AgentSession:
                     short = result["answer"][:220].replace("\n", " ").strip()
                     tts.speak(short)
 
+                # extract_pdf_to_spreadsheet / write_spreadsheet
+                elif tool in ("extract_pdf_to_spreadsheet", "write_spreadsheet") and result.get("path"):
+                    rows = result.get("row_count", "?")
+                    done_msg = f"Spreadsheet ready ({rows} rows) → {result['path']}"
+                    headers = result.get("headers") or []
+                    preview_rows = result.get("rows") or []
+                    preview_lines = []
+                    if headers:
+                        preview_lines.append(" | ".join(str(h) for h in headers))
+                    for r in preview_rows[:8]:
+                        if isinstance(r, list):
+                            preview_lines.append(" | ".join(str(c) for c in r))
+                        else:
+                            preview_lines.append(str(r))
+                    preview = "\n".join(preview_lines) if preview_lines else result.get("message", "")
+                    await self.send({
+                        "type": "rich_result",
+                        "label": "Spreadsheet",
+                        "text": f"{result.get('message', done_msg)}\n\n{preview}".strip(),
+                    })
+                    tts.speak(f"Saved {rows} rows to the spreadsheet.")
+
+                # presentation update / create
+                elif tool in (
+                    "update_presentation_from_document",
+                    "create_presentation_from_document",
+                ) and result.get("path"):
+                    count = result.get("slide_count", "?")
+                    done_msg = f"Presentation ready ({count} slides) → {result['path']}"
+                    slides = result.get("slides") or []
+                    preview_lines = []
+                    for idx, s in enumerate(slides[:6], 1):
+                        title = s.get("title") if isinstance(s, dict) else str(s)
+                        preview_lines.append(f"{idx}. {title}")
+                        if isinstance(s, dict):
+                            for b in (s.get("bullets") or [])[:3]:
+                                preview_lines.append(f"   • {b}")
+                    preview = "\n".join(preview_lines) if preview_lines else result.get("message", "")
+                    await self.send({
+                        "type": "rich_result",
+                        "label": "Presentation",
+                        "text": f"{result.get('message', done_msg)}\n\n{preview}".strip(),
+                    })
+                    tts.speak(f"Saved a presentation with {count} slides.")
+
+                # organize_files: show what moved where
+                elif tool == "organize_files":
+                    moved = result.get("moved", 0)
+                    done_msg = result.get("message") or f"Organized {moved} files"
+                    moves = result.get("moves") or []
+                    preview_lines = []
+                    for m in moves[:12]:
+                        if isinstance(m, dict):
+                            name = Path(m.get("src") or m.get("dest") or "").name
+                            folder = Path(m.get("folder") or m.get("dest_folder") or m.get("dest") or "").name
+                            preview_lines.append(f"• {name} → {folder}")
+                    preview = "\n".join(preview_lines)
+                    await self.send({
+                        "type": "rich_result",
+                        "label": "Organized files",
+                        "text": f"{done_msg}\n\n{preview}".strip(),
+                    })
+                    tts.speak(f"Organized {moved} files.")
+
                 await self.send({"type": "step_done", "step_index": i, "verified": True, "text": done_msg})
                 log.info("[%s] step %d done: %s", self.session_id, i, done_msg)
                 completed += 1
+                consecutive_failures = 0
+                self._completed_before_interrupt = completed
             else:
+                consecutive_failures += 1
                 err_msg = result.get("message") or verification.get("message", "Step failed")
                 await self.send({"type": "step_failed", "step_index": i, "text": err_msg})
                 log.warning("[%s] step %d failed: %s", self.session_id, i, err_msg)
                 self.audit.log_error(err_msg)
 
+                failure_assessment = safety.assess_step_failure(
+                    tool,
+                    result if isinstance(result, dict) else {"message": err_msg},
+                    step_index=i,
+                    total_steps=len(steps),
+                    consecutive_failures=consecutive_failures,
+                )
+                if failure_assessment and not failure_assessment.can_proceed:
+                    if run_id == self._run_id and not self._popup_sent:
+                        await self.send_popup(
+                            failure_assessment.kind,
+                            failure_assessment.title,
+                            failure_assessment.message,
+                        )
+                    self.audit.log_outcome(failure_assessment.kind, failure_assessment.message)
+                    return
+
         # Done
+        if _stale():
+            return
+        # Partial success without a hard abort — still warn if we missed steps
+        if completed < len(steps):
+            await self.send_popup(
+                "uncertain",
+                "Couldn't finish confidently",
+                f"I only completed {completed} of {len(steps)} steps, so I'm not confident the task finished.",
+            )
+            self.audit.log_outcome("partial", f"{completed}/{len(steps)}")
+            return
         summary_msg = f"Done! Completed {completed} of {len(steps)} steps."
         await self.send({"type": "done", "text": summary_msg})
         if completed == len(steps):
             tts.speak("All done!")
         self.audit.log_outcome("success" if completed == len(steps) else "partial", summary_msg)
         log.info("[%s] Task complete: %s", self.session_id, summary_msg)
-
 
 def _describe_step(tool: str, args: dict) -> str:
     descs = {
@@ -394,6 +794,28 @@ def _describe_step(tool: str, args: dict) -> str:
         ),
         "compare_pdf_with_dummy": lambda a: (
             f"Comparing PDF summary with dummy ({a.get('pdf_path', '')})…"
+        ),
+        "compare_open_files": lambda a: (
+            f"Opening & comparing {a.get('path_a', 'File A')} vs {a.get('path_b', 'File B')}…"
+        ),
+        "extract_pdf_to_spreadsheet": lambda a: (
+            f"Locating PDF info → spreadsheet"
+            + (f" ({a.get('query', '')})" if a.get("query") else "")
+            + "…"
+        ),
+        "write_spreadsheet": lambda a: f"Writing spreadsheet {a.get('path', '')}…",
+        "update_presentation_from_document": lambda a: (
+            "Updating presentation from document"
+            + (f" ({a.get('query', '')})" if a.get("query") else "")
+            + "…"
+        ),
+        "create_presentation_from_document": lambda a: (
+            f"Creating presentation from {a.get('source_path', 'document')}…"
+        ),
+        "organize_files": lambda a: (
+            f"Organizing {a.get('directory', 'files')}"
+            + (f" ({a.get('instruction', '')[:60]})" if a.get("instruction") else "")
+            + "…"
         ),
         "computer_use":   lambda a: f"Controlling computer: {a.get('goal', '')[:80]}…",
         "write_file":     lambda a: f"Writing to {a.get('path', '')}…",
@@ -439,8 +861,8 @@ async def ws_endpoint(ws: WebSocket):
                     "language": result["language"],
                 })
 
-                # Run agent in background so control messages can still arrive
-                asyncio.create_task(session.run_task(result))
+                # Start / interrupt task (cancel or change mid-way → popup)
+                await session.handle_new_transcript(result)
 
             # Text control message
             elif "text" in msg and msg["text"]:
