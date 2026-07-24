@@ -1,13 +1,22 @@
 {
-  "name": "intellivox-ui",
+  "name": "intellivox",
+  "productName": "IntelliVox",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Cross-platform voice agent desktop app — macOS, Windows, and Linux",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:desktop": "cross-env ELECTRON=true vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "desktop:build": "npm run build:desktop && electron-builder",
+    "desktop:build:mac": "npm run build:desktop && electron-builder --mac",
+    "desktop:build:win": "npm run build:desktop && electron-builder --win",
+    "desktop:build:linux": "npm run build:desktop && electron-builder --linux"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -17,7 +26,45 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12",
     "oxlint": "^1.71.0",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.intellivox.app",
+    "productName": "IntelliVox",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "icon": "build/icon.png",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

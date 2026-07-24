@@ -5,7 +5,7 @@ const BARS = Array.from({ length: 20 }, (_, i) => ({
   id: i, dur: `${0.5 + Math.random() * 0.7}s`, delay: `${Math.random() * 0.5}s`,
 }));
 
-const WS_URL = 'ws://localhost:8765/ws';
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8765/ws';
 
 /* ── useAgentVoice hook ── */
 function useAgentVoice() {
@@ -34,7 +34,7 @@ function useAgentVoice() {
       handleServerMessage(msg);
     };
     ws.onerror = () => {
-      setErrorMsg('Cannot connect to agent server (ws://localhost:8765). Is it running?');
+      setErrorMsg(`Cannot connect to agent server (${WS_URL}). Is it running?`);
       setPhase('error');
     };
     wsRef.current = ws;
@@ -104,7 +104,10 @@ function useAgentVoice() {
         break;
 
       case 'rich_result':
-        setRichResult({ label: msg.label, text: msg.text });
+        // Only show summary panel for explicit summary requests
+        if (msg.label === 'Summary') {
+          setRichResult({ label: msg.label, text: msg.text });
+        }
         break;
 
       case 'error':
@@ -152,12 +155,21 @@ function useAgentVoice() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mime = ['audio/webm;codecs=opus','audio/webm','audio/ogg','audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4']
+        .find(t => MediaRecorder.isTypeSupported(t)) || '';
       const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
+        // Final chunk may arrive after onstop in Electron — wait briefly
+        await new Promise(r => setTimeout(r, 150));
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mime || 'audio/webm' });
+        if (blob.size === 0) {
+          setErrorMsg('No audio captured — try holding the mic button a little longer.');
+          setPhase('error');
+          streamRef.current?.getTracks().forEach(t => t.stop());
+          return;
+        }
         const buf  = await blob.arrayBuffer();
         const send = () => {
           if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(buf);
@@ -167,7 +179,8 @@ function useAgentVoice() {
         streamRef.current?.getTracks().forEach(t => t.stop());
       };
       mediaRef.current = recorder;
-      recorder.start(250);
+      // Single blob on stop — timesliced chunks break mp4/webm in Electron
+      recorder.start();
     } catch (err) {
       setErrorMsg('Microphone access denied: ' + err.message);
       setPhase('error');
@@ -176,6 +189,7 @@ function useAgentVoice() {
 
   const stopListening = useCallback(() => {
     if (mediaRef.current?.state === 'recording') {
+      mediaRef.current.requestData();
       mediaRef.current.stop();
       setPhase('transcribing');
     }
@@ -265,10 +279,11 @@ export default function App() {
   const isError      = phase === 'error';
   const isClarify    = phase === 'clarify';
   const isConfirm    = phase === 'confirm';
+  const showSummary = richResult?.label === 'Summary';
   const showCard     = !!transcript || steps.length > 0 || isProcessing || isDone || isError || isClarify;
 
   return (
-    <div className="app">
+    <div className={`app ${showSummary ? 'has-summary' : ''}`}>
       <div className="bg-orb bg-orb-1" />
       <div className="bg-orb bg-orb-2" />
       <div className="bg-orb bg-orb-3" />
@@ -287,6 +302,7 @@ export default function App() {
         </div>
       )}
 
+      <div className="app-layout">
       <div className="content">
         {/* Brand */}
         <div className="brand">
@@ -368,7 +384,7 @@ export default function App() {
           )}
 
           {/* Done response */}
-          {isDone && !richResult && (
+          {isDone && (
             <div className="response-pill visible" style={{marginTop: steps.length ? 12 : 0}}>
               <div className="avatar">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
@@ -376,22 +392,6 @@ export default function App() {
                 </svg>
               </div>
               <span>{statusText}</span>
-            </div>
-          )}
-
-          {/* Rich result card — summary / answer */}
-          {richResult && (
-            <div className="rich-result-card">
-              <div className="rich-result-label">
-                <span>{richResult.label}</span>
-              </div>
-              <div className="rich-result-text">
-                {richResult.text.split('\n').map((line, i) => (
-                  <p key={i} style={{margin: line.startsWith('•') || line.startsWith('-') ? '4px 0' : '8px 0'}}>
-                    {line}
-                  </p>
-                ))}
-              </div>
             </div>
           )}
 
@@ -414,6 +414,23 @@ export default function App() {
             <button id="cancel-btn" className="cancel-btn" onClick={cancelTask}>Cancel</button>
           )}
         </div>
+      </div>
+
+      {/* Summary panel — right side, only when user asked for a summary */}
+      {showSummary && (
+        <aside className="summary-panel">
+          <div className="summary-panel-header">
+            <span className="summary-panel-title">Summary</span>
+          </div>
+          <div className="summary-panel-body">
+            {richResult.text.split('\n').map((line, i) => (
+              <p key={i} className="summary-line">
+                {line}
+              </p>
+            ))}
+          </div>
+        </aside>
+      )}
       </div>
 
       {/* History */}
@@ -529,38 +546,6 @@ export default function App() {
         .cancel-btn:hover { background: rgba(248,113,113,0.15); }
 
         .mic-btn:disabled { cursor: not-allowed; opacity: 0.6; }
-
-        .rich-result-card {
-          margin-top: 16px;
-          background: rgba(124,58,237,0.06);
-          border: 1px solid rgba(124,58,237,0.25);
-          border-radius: 14px;
-          overflow: hidden;
-          animation: fadeIn 0.4s ease;
-        }
-        .rich-result-label {
-          background: linear-gradient(135deg, rgba(124,58,237,0.3), rgba(37,99,235,0.2));
-          padding: 8px 14px;
-          font-family: var(--font-ui);
-          font-size: 0.75rem;
-          font-weight: 700;
-          color: #c4b5fd;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          border-bottom: 1px solid rgba(124,58,237,0.2);
-        }
-        .rich-result-text {
-          padding: 14px 16px;
-          max-height: 300px;
-          overflow-y: auto;
-          font-family: var(--font-ui);
-          font-size: 0.84rem;
-          color: var(--text-primary);
-          line-height: 1.65;
-        }
-        .rich-result-text p { margin: 0; padding: 0; }
-        .rich-result-text::-webkit-scrollbar { width: 4px; }
-        .rich-result-text::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.3); border-radius: 2px; }
       `}</style>
     </div>
   );
